@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# shellcheck disable=SC2034,SC2154,SC2215,SC2286,SC2288,SC2329,SC1090,SC2016
+# shellcheck disable=SC2034,SC2154,SC2215,SC2286,SC2288,SC2317,SC2329,SC1090,SC2016
 #
 # Tests del empaquetado. build.sh corta los `source` casando LÍNEAS EXACTAS:
 # partir en dos la de help.sh deja el repositorio en verde y el bundle ROTO.

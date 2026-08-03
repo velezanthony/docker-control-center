@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# shellcheck disable=SC2034,SC2154,SC2215,SC2286,SC2288,SC2329  # falsos positivos del DSL
+# shellcheck disable=SC2034,SC2154,SC2215,SC2286,SC2288,SC2317,SC2329  # falsos positivos del DSL
 #
 # Tests de src/scripts/engine-ram.sh. Aquí vivía el bug de mawk que fallaba 1 de
 # cada 10 ejecuciones: SIGPIPE al leer un /proc que cambia bajo los pies, el END

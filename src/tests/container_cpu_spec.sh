@@ -3,7 +3,7 @@
 # El DSL dispara seis falsos positivos INHERENTES en shellcheck: las filas de
 # `Parameters` son datos, `When call` invoca indirecto, y `setup()` escribe lo
 # que otro bloque lee. SC2016: los `bash -c '...'` llevan $1 a propósito.
-# shellcheck disable=SC2034,SC2154,SC2215,SC2286,SC2288,SC2329,SC2016
+# shellcheck disable=SC2034,SC2154,SC2215,SC2286,SC2288,SC2317,SC2329,SC2016
 #
 # Tests de src/scripts/container-cpu.sh. Al reloj se le pone un doble EN UN
 # FICHERO: `now_usec` se invoca dentro de $( ), o sea en una subshell, y una

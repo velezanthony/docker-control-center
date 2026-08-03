@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# shellcheck disable=SC2034,SC2329
+# shellcheck disable=SC2034,SC2317,SC2329
 # shellcheck disable=SC2154  # $SEP lo define common.sh, que carga el spec
 #
 # fixtures.sh — host de mentira de la suite. Todo INVENTADO: un test debe dar lo
