@@ -25,7 +25,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Instalar shellcheck y jq
         run: sudo apt-get update && sudo apt-get install -y shellcheck jq
@@ -51,7 +51,7 @@ jobs:
         run: cp dist/docker-control-center.sh /tmp/dcc && cd /tmp && ./dcc version
 
       - name: Publicar
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: dist/docker-control-center.sh
           generate_release_notes: true

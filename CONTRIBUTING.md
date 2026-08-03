@@ -36,7 +36,7 @@ Three rules explain most of the design:
 | An operation | `op_x()` + a line in `src/commands.txt` | dispatch derives from `declare -F op_*`. Two tests demand the line **and** its `help_x` catalogue key |
 | A language | `src/i18n/xx.sh` | discovered by glob. Missing keys fall back to the key name |
 | On-screen text | a catalogue key, via `t`/`tf` | never a literal. The **whole sentence** goes in the catalogue: "Choose a %s" produced *"Elige un imagen"* |
-| A test | `src/tests/x_spec.sh` | copy the header of an existing spec: the DSL trips six inherent shellcheck false positives and `make lint` fails without it |
+| A test | `src/tests/x_spec.sh` | copy the header of an existing spec: the DSL trips seven inherent shellcheck false positives and `make lint` fails without it. It disables both SC2317 and SC2329 — the same check under its old and new name, so it lints clean on 0.9.0 (what Ubuntu ships to CI) and on 0.11.0 |
 | Test data | `src/tests/fixtures.sh` | invented, never from your `docker ps` |
 
 Every script ends with the guard, in this exact three-line form — `strip_module`

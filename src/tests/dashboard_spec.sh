@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# shellcheck disable=SC2034,SC2154,SC2215,SC2286,SC2288,SC2329  # falsos positivos del DSL
+# shellcheck disable=SC2034,SC2154,SC2215,SC2286,SC2288,SC2317,SC2329  # falsos positivos del DSL
 #
 # Datos inyectados por PSDATA / VOLMAP / CPU, cero docker.
 # REGLA: $SEP (\x1f) no puede viajar en los argumentos de `When` — aborta la
