@@ -6,15 +6,22 @@
 name: Docs
 
 on:
+  # Se CONSTRUYE también en los PRs y solo se DESPLIEGA desde main. Sin el
+  # pull_request, un `mkdocs build --strict` roto —una nav que apunta a una
+  # página que no existe— no se vería hasta después de mergear.
+  # La lista va duplicada a propósito: GitHub Actions no soporta anchors de
+  # YAML de forma fiable, y un workflow que no parsea no avisa, simplemente no
+  # corre.
   push:
-    # master está aquí porque el repositorio aún no ha elegido rama principal.
-    # Cuando se decida, quita la que sobre — y cuadra `edit_uri` en mkdocs.yml,
-    # que hoy apunta a main.
-    branches: [main, master]
+    branches: [main]
+    paths:
+      - "docs/**"          # incluye docs/requirements.txt
+      - "mkdocs.yml"
+      - ".github/workflows/docs.yml"
+  pull_request:
     paths:
       - "docs/**"
       - "mkdocs.yml"
-      - "docs/requirements.txt"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 
@@ -32,12 +39,12 @@ jobs:
     name: Build site
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
 
@@ -53,20 +60,27 @@ jobs:
       - name: Build site
         run: uv run --no-sync mkdocs build --strict
 
+      # `enablement: true` activa Pages si aún no lo está, en vez de abortar con
+      # "Get Pages site failed / Not Found". Así el workflow no depende de que
+      # alguien se acuerde de tocar Settings.
       - name: Configure Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
+        with:
+          enablement: true
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: site/
 
+  # Nada de desplegar desde un PR: solo se publica lo que ya está en main.
   deploy:
     name: Deploy to GitHub Pages
     needs: build
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

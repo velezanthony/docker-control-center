@@ -4,9 +4,12 @@
 # inyectados. Por eso corren en segundos y en cualquier máquina.
 name: CI
 
+# El push se acota a las ramas de integración. Con `branches: ["**"]` cada PR
+# corría DOS veces: una por el push a su rama y otra por el propio PR. En una
+# rama de trabajo la CI la dispara el pull_request, que es cuando importa.
 on:
   push:
-    branches: ["**"]
+    branches: [main, development]
   pull_request:
 
 jobs:
@@ -14,7 +17,7 @@ jobs:
     name: check (bash 5, mawk)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Instalar shellcheck y jq
         run: sudo apt-get update && sudo apt-get install -y shellcheck jq
@@ -42,7 +45,7 @@ jobs:
           ./dcc help >/dev/null
 
       - name: Subirlo como artefacto de la ejecución
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: docker-control-center
           path: dist/docker-control-center.sh
@@ -61,7 +64,7 @@ jobs:
     name: bash 4 (lo que promete el README)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Suite bajo bash 4.4 + mawk
         run: |
           docker run --rm -e LANG=C.UTF-8 -e LC_ALL=C.UTF-8 \
@@ -87,7 +90,7 @@ jobs:
     name: gawk (sin extensiones GNU)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Poner gawk como el awk del sistema
         run: |
           sudo apt-get update && sudo apt-get install -y gawk
