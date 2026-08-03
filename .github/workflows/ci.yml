@@ -12,6 +12,13 @@ on:
     branches: [main, development]
   pull_request:
 
+# Sin esto, tres empujones seguidos dejan tres ejecuciones completas corriendo a
+# la vez y nadie cancela las viejas. Se cancela la superada... salvo en main: ahí
+# interesa que cada commit tenga su resultado, aunque llegue otro detrás.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   check:
     name: check (bash 5, mawk)
