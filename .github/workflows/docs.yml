@@ -1,0 +1,72 @@
+# Publica el sitio de mkdocs en GitHub Pages. Mismo patrón que
+# django-cotton-gallery: artefacto + deploy-pages, sin rama gh-pages.
+#
+# La diferencia: allí las dependencias salen de `pip install -e ".[docs]"`
+# porque es un paquete Python. Esto es bash, así que van en docs/requirements.txt.
+name: Docs
+
+on:
+  push:
+    # master está aquí porque el repositorio aún no ha elegido rama principal.
+    # Cuando se decida, quita la que sobre — y cuadra `edit_uri` en mkdocs.yml,
+    # que hoy apunta a main.
+    branches: [main, master]
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "docs/requirements.txt"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv venv --python 3.12
+
+      - name: Install docs dependencies
+        run: uv pip install -r docs/requirements.txt
+
+      # --strict convierte en error lo que si no es un aviso que nadie lee: una
+      # entrada de la nav apuntando a una página que no existe, un enlace roto.
+      # La nav llegó a declarar cuatro páginas inexistentes sin que se notara.
+      - name: Build site
+        run: uv run --no-sync mkdocs build --strict
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

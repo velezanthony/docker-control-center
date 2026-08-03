@@ -1,0 +1,39 @@
+{
+	// ==========================================================================
+	//  Los *_spec.sh son bash (por la extensión .sh ya se colorean solos). Lo
+	//  que sí hay que arreglar es shellcheck y el ruido de vendor/.
+	// ==========================================================================
+
+	// -x para que shellcheck siga los `source`, igual que hace `make lint`. Sin
+	// esto marca como no resuelto todo lo que viene de common.sh.
+	"shellcheck.customArgs": ["-x"],
+	"shellcheck.exclude": [],
+
+	// vendor/ son 175 ficheros de ShellSpec que no son tuyos: fuera del
+	// explorador, de la búsqueda y del vigilante de ficheros. El código sigue
+	// ahí y se puede abrir a mano; simplemente deja de aparecer en todo.
+	"files.exclude": {
+		"**/vendor": false,
+		"**/coverage": false
+	},
+	"search.exclude": {
+		"**/vendor": true,
+		"**/coverage": true,
+		"**/dist": true
+	},
+	"files.watcherExclude": {
+		"**/vendor/**": true,
+		"**/coverage/**": true
+	},
+
+	// El proyecto usa tabuladores (shfmt -i 0). Que el editor no meta espacios.
+	"[shellscript]": {
+		"editor.insertSpaces": false,
+		"editor.detectIndentation": false
+	},
+
+	// dependencies.txt es una lista, no código: sin autoformato que la descuadre.
+	"[plaintext]": {
+		"editor.formatOnSave": false
+	}
+}

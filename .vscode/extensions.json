@@ -1,0 +1,26 @@
+{
+	// ==========================================================================
+	//  Recomendaciones para quien clone el repositorio.
+	//
+	//  NO se recomienda ninguna extensión de ShellSpec. Existen dos y las dos
+	//  están abandonadas:
+	//    · lutzmad.vscode-shellspec  — v0.0.2; su README dice que no tiene
+	//      ninguna característica específica más allá del resaltado
+	//    · StefanMayrhofer.shellspec-tester — v0.0.4, sin tocar desde 06/2023;
+	//      el autor avisa de que se ofrece "tal cual"
+	//
+	//  Si quieres la pestaña Testing, instala la segunda a sabiendas. Para
+	//  ejecutar los tests, .vscode/tasks.json hace lo mismo sin depender de nadie.
+	// ==========================================================================
+	"recommendations": [
+		// shellcheck en vivo: es EL linter del proyecto, el mismo que `make lint`
+		"timonwong.shellcheck",
+		// shfmt: el formateador que usa `make fmt`
+		"mkhl.shfmt",
+		// Resaltado de shell bastante mejor que el que trae VS Code de serie
+		"jeff-hykin.better-shellscript-syntax",
+		// El Makefile es la puerta de entrada del proyecto
+		"ms-vscode.makefile-tools"
+	],
+	"unwantedRecommendations": []
+}

@@ -1,0 +1,68 @@
+{
+	// ==========================================================================
+	//  No hay extensión de ShellSpec que merezca la pena (las dos que existen
+	//  llevan años sin tocarse). Esto la sustituye: llama al Makefile, que es
+	//  el mismo camino que usa la CI y el que usarías en la terminal.
+	//
+	//  Ctrl+Shift+B lanza la suite. Ctrl+Shift+P > "Run Task" para el resto.
+	// ==========================================================================
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "test: toda la suite",
+			"type": "shell",
+			"command": "make test",
+			"group": { "kind": "test", "isDefault": true },
+			"presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+			"problemMatcher": []
+		},
+		{
+			// El fichero abierto: src/tests/common_spec.sh -> make test T=common
+			"label": "test: solo el fichero abierto",
+			"type": "shell",
+			"command": "make test T=\"$(basename '${relativeFile}' _spec.sh)\"",
+			"group": "test",
+			"presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+			"problemMatcher": []
+		},
+		{
+			// Un solo ejemplo, por número de línea. ShellSpec acepta fichero:línea.
+			"label": "test: solo el ejemplo bajo el cursor",
+			"type": "shell",
+			"command": "vendor/shellspec/shellspec '${relativeFile}:${lineNumber}'",
+			"group": "test",
+			"presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+			"problemMatcher": []
+		},
+		{
+			"label": "lint: shellcheck sobre src/",
+			"type": "shell",
+			"command": "make lint",
+			"group": "build",
+			"presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+			"problemMatcher": []
+		},
+		{
+			"label": "coverage: kcov -> coverage/",
+			"type": "shell",
+			"command": "make coverage",
+			"presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+			"problemMatcher": []
+		},
+		{
+			"label": "deps: traer vendor/ desde dependencies.txt",
+			"type": "shell",
+			"command": "make deps",
+			"presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+			"problemMatcher": []
+		},
+		{
+			"label": "bundle: generar dist/",
+			"type": "shell",
+			"command": "make bundle",
+			"group": "build",
+			"presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+			"problemMatcher": []
+		}
+	]
+}

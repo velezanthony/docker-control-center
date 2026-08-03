@@ -1,0 +1,23 @@
+# spec_helper.sh vive junto a los specs, no en un directorio aparte. ShellSpec
+# lo busca en su load-path, que por defecto es spec/ — hay que decirle dónde.
+--load-path src/tests
+--require spec_helper
+
+# Los tests viven junto al código que prueban, bajo src/. No en un spec/ suelto
+# en la raíz: la raíz es para herramientas y para lo generado.
+--default-path src/tests
+
+# Los scripts usan `declare -A`, `[[ ]]` y arrays: bash, no POSIX sh. Sin esto
+# ShellSpec elegiría el shell del sistema y fallaría por motivos que no tienen
+# nada que ver con el código que se está probando.
+--shell bash
+
+## Cobertura (make coverage). Sin acotarla, kcov instrumenta también el propio
+## ShellSpec y el porcentaje sale sobre ~7800 líneas que no son tuyas.
+## Se mide src/scripts/ y nada más: i18n/ son datos y medir los tests no dice nada.
+--kcov-options "--include-path=src/scripts/"
+--kcov-options "--exclude-pattern=/src/tests/,/vendor/,/src/i18n/,.jq"
+
+# Si un fichero deja de casar el patrón, la suite correría 0 ejemplos y saldría
+# en verde. Un 0 en verde es peor que un fallo.
+--fail-no-examples

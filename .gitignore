@@ -1,0 +1,37 @@
+# ==============================================================================
+#  Lo que NUNCA debe salir de esta máquina.
+#
+#  `make volume-backup` y `make volume-backup-all` escriben tarballs con el
+#  CONTENIDO ÍNTEGRO de tus volúmenes (bases de datos incluidas) en ./backups.
+#  Sin esta regla, un `git add .` los publicaría. No la quites.
+# ==============================================================================
+backups/
+*.tar.gz
+
+# Preferencias locales (idioma…). Son tuyas, no del proyecto.
+.config
+
+# Fichero generado por `make bundle`. Se distribuye, no se versiona.
+dist/
+
+# Salida de `make coverage`: kcov escribe ~1 MB de HTML por ejecución. Es un
+# INFORME, no código — se regenera en 3 segundos y no se versiona.
+# OJO: `tools/shellspec/` SÍ va al repositorio. No es lo mismo: es el framework
+# vendorizado, y está ahí justo para que nadie tenga que instalar nada.
+coverage/
+report/
+
+# Overrides locales de ShellSpec (tuyos, no del proyecto).
+.shellspec-local.conf
+
+# Ruido del sistema
+.DS_Store
+*.swp
+*~
+
+# Dependencias de desarrollo. Se traen con `make deps` desde
+# dependencies.txt, que es la lista de verdad. Material generado, como dist/.
+vendor/
+
+# Sitio de mkdocs generado por `mkdocs build`. Lo publica el workflow Docs.
+site/

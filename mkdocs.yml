@@ -1,0 +1,118 @@
+site_name: Docker Control Center
+site_description: A Docker dashboard for the terminal. Bash and make, nothing resident.
+site_url: https://velezanthony.github.io/docker-control-center/
+repo_url: https://github.com/velezanthony/docker-control-center
+repo_name: velezanthony/docker-control-center
+edit_uri: edit/main/docs/
+
+copyright: Copyright &copy; 2026 Anthony Velez Tapia
+
+theme:
+  name: material
+  language: en
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue grey
+      accent: cyan
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue grey
+      accent: cyan
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    # navigation.instant NO: es incompatible con el enlace contextual del
+    # selector de idioma, y este sitio es bilingüe. mkdocs lo avisa y --strict
+    # lo convierte en error, que es como debe ser.
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - navigation.footer
+    - toc.follow
+    - content.code.copy
+    - content.code.annotate
+    - content.action.edit
+    - search.highlight
+    - search.suggest
+  icon:
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+plugins:
+  - search
+  # Selector de idioma. Estructura por SUFIJO: `index.md` es el inglés y
+  # `index.es.md` su traducción. Con la estructura por carpetas habría que
+  # duplicar el árbol entero y mover ficheros para añadir un idioma; con
+  # sufijos, añadir uno es copiar los .md y ponerles otra extensión.
+  #
+  # `fallback_to_default: true` es lo que hace que una traducción a medias no
+  # rompa el sitio: la página que falte se sirve en inglés en vez de dar un 404.
+  # Es la misma decisión que en los catálogos del propio programa, donde una
+  # clave sin traducir cae a su nombre en vez de reventar.
+  - i18n:
+      docs_structure: suffix
+      fallback_to_default: true
+      reconfigure_material: true
+      reconfigure_search: true
+      languages:
+        - locale: en
+          default: true
+          name: English
+          build: true
+        - locale: es
+          name: Español
+          build: true
+          nav_translations:
+            Home: Inicio
+            Using it: Usarlo
+            Installation: Instalación
+            Commands: Comandos
+            Language: Idioma
+            Contributing: Contribuir
+
+nav:
+  - Home: index.md
+  - Using it:
+      - Installation: users/installation.md
+      - Commands: users/commands.md
+      - Language: users/language.md
+  # Solo se listan páginas que EXISTEN: una entrada a un fichero que falta
+  # rompe `mkdocs build --strict`. Las de conventions, testing y releasing
+  # estaban declaradas y sin escribir.
+  - Contributing:
+      - Bash & ShellSpec: contributors/engineering.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/velezanthony/docker-control-center

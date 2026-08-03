@@ -1,0 +1,57 @@
+name: Bug report
+description: Something does not work as documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. The `dcc version` output below is the single most
+        useful thing you can give us: it says which version you run and which
+        tools it found on your machine. Most bugs in this project turned out to
+        be "works here, not there".
+
+  - type: textarea
+    id: version
+    attributes:
+      label: Output of `dcc version` (or `make version`)
+      render: shell
+      placeholder: |
+        Docker Control Center 0.9.0
+          bash    5.2.21
+          docker  /usr/bin/docker
+          jq      not installed
+          language  en (locale)
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you ran, what you expected, what you got.
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Actual output
+      render: shell
+    validations:
+      required: false
+
+  - type: input
+    id: distro
+    attributes:
+      label: Distribution
+      placeholder: "Ubuntu 24.04, Fedora 41, Arch…"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I am using native Docker Engine, not Docker Desktop
+        - label: I checked that `docker ps` works on its own

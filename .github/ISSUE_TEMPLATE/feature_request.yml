@@ -1,0 +1,33 @@
+name: Feature request
+description: Suggest something the tool should do
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before opening this: the tool deliberately does NOT try to be a TUI. If
+        what you want is browsing containers with the keyboard, `lazydocker`
+        already does that well and we are not competing with it.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the situation, not the solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What did you have in mind?
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Does it fit the project's constraints?
+      options:
+        - label: It does not add runtime dependencies beyond docker, bash and awk
+        - label: It prints and exits (it is not an interactive interface)

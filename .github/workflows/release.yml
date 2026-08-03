@@ -1,0 +1,67 @@
+# ==============================================================================
+#  Publicación.
+#
+#  El README dice "descárgate dcc y ponlo en ~/.local/bin". Eso era mentira
+#  mientras no existiera ninguna URL de la que descargarlo: dist/ no se versiona
+#  a propósito (es un fichero generado), así que sin este flujo no había forma
+#  de que un usuario obtuviera la herramienta.
+#
+#  Se dispara con una etiqueta:  git tag v1.0.0 && git push --tags
+#
+#  Y COMPRUEBA que la etiqueta coincide con DCC_VERSION antes de publicar nada:
+#  una release v1.2.0 que instala un binario que se anuncia como 1.0.0 es peor
+#  que no tener releases.
+# ==============================================================================
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar shellcheck y jq
+        run: sudo apt-get update && sudo apt-get install -y shellcheck jq
+
+      - name: No se publica nada que no pase make check
+        run: make check
+
+      - name: La etiqueta debe coincidir con DCC_VERSION
+        run: |
+          etiqueta="${GITHUB_REF_NAME#v}"
+          codigo=$(awk -F'"' '/^DCC_VERSION=/ {print $2; exit}' src/scripts/common.sh)
+          if [ "$etiqueta" != "$codigo" ]; then
+            printf 'La etiqueta dice %s y el código dice %s.\n' "$etiqueta" "$codigo"
+            printf 'Actualiza DCC_VERSION en src/scripts/common.sh y vuelve a etiquetar.\n'
+            exit 1
+          fi
+          printf 'Etiqueta y código coinciden: %s\n' "$codigo"
+
+      - name: Generar el fichero único
+        run: make bundle
+
+      - name: Comprobarlo fuera del repositorio
+        run: cp dist/docker-control-center.sh /tmp/dcc && cd /tmp && ./dcc version
+
+      - name: Publicar
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/docker-control-center.sh
+          generate_release_notes: true
+          body: |
+            ## Instalación
+
+            ```bash
+            curl -LO https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/dcc
+            chmod +x dcc && mv dcc ~/.local/bin/
+            dcc dash
+            ```
+
+            Un solo fichero. Sin dependencias más allá de `docker`, `bash` y `awk`.

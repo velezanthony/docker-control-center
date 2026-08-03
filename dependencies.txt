@@ -1,0 +1,30 @@
+# ==============================================================================
+#  dependencies.txt — de qué depende ESTE REPOSITORIO para desarrollarse.
+#
+#  El usuario final no depende de nada de aquí: se descarga dist/*.sh y lo
+#  ejecuta. Esto es para quien clona el repositorio y quiere lanzar los tests.
+#
+#  `make deps` lee este fichero, descarga cada entrada en vendor/, y COMPRUEBA
+#  el sha256 antes de descomprimir. Si no cuadra, aborta: una dependencia que se
+#  descarga de internet sin verificar es un agujero de cadena de suministro, y
+#  da igual lo pequeño que sea el proyecto.
+#
+#  vendor/ está en .gitignore. Esta lista es la fuente de la verdad; el
+#  directorio es material generado, como dist/.
+#
+#  Formato (separado por espacios, # para comentarios):
+#     nombre  versión  sha256  url  [rutas,a,conservar]
+#
+#  La 5ª columna es opcional: si está, del tarball solo se guardan esas rutas y
+#  el resto se tira. De ShellSpec eso son ~1 MB de runtime frente a 3,7 MB de
+#  repositorio con docs, ejemplos y sus propios tests. Sin ella, se guarda todo.
+#
+#  Para subir de versión: cambia versión y sha256 a la vez. Se obtiene con
+#     curl -fsSL <url> | sha256sum
+#
+#  NOTA: ShellSpec trae su propio instalador y funciona (`install.sh 0.28.1
+#  --prefix ./vendor`), pero NO verifica ningún checksum y guarda los 3,7 MB
+#  enteros. Por eso se descarga desde aquí y no con él.
+# ==============================================================================
+
+shellspec 0.28.1 400d835466429a5fe6c77a62775a9173729d61dd43e05dfa893e8cf6cb511783 https://github.com/shellspec/shellspec/archive/refs/tags/0.28.1.tar.gz shellspec,lib,libexec,helper,stub,bin,LICENSE,CHANGELOG.md

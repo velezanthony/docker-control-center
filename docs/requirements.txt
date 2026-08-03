@@ -1,0 +1,14 @@
+# Dependencias del SITIO de documentación. No las necesita nadie que use la
+# herramienta: el producto es un .sh sin dependencias.
+#
+# Aquí y no en un pyproject.toml porque este proyecto no es un paquete Python.
+#
+# CON TECHO, y no solo `>=` como en django-cotton-gallery: el propio build avisa
+# de que MkDocs 2.0 elimina el sistema de plugins y que "no existe ruta de
+# migración". Sin `<2`, el día que salga se lleva por delante el plugin de
+# idiomas y el sitio deja de construirse solo. Dependabot propondrá las subidas
+# dentro del techo; levantarlo es una decisión, no un accidente.
+mkdocs>=1.6,<2
+mkdocs-material>=9.5,<10
+pymdown-extensions>=10.0,<11
+mkdocs-static-i18n>=1.2,<2

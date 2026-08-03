@@ -1,0 +1,53 @@
+# commands.txt — los comandos del PRODUCTO: qué existe, en qué orden y en qué
+# sección. Es lo que el bundle incrusta como ayuda y lo que `dcc help` pinta.
+#
+# El texto va en inglés porque es la fuente Y el respaldo: help.sh busca la
+# traducción por nombre (`dash` -> `help_dash`) y si no la encuentra imprime
+# esto. Misma sintaxis `##` que un Makefile, para compartir el renderizador.
+
+##@ Overview
+help: ## Show this help
+version: ## Show the version and what was found on this system
+lang: ## Show or change the interface language
+dash: ## ★ Dashboard: summary, stacks, volumes, images and disk
+dash-fast: ## Dashboard with no sizes or disk — always ~1s
+status: ## Executive summary: counted waste + real disk usage
+ps: ## Containers grouped by stack, coloured by severity
+psa: ps  ## Alias of ps (the stack view already includes stopped ones)
+images: ## Largest images (⌀ = no container uses it)
+volumes: ## Volumes with real size and who uses them
+networks: ## Defined networks
+stats: ## Live usage (CPU/RAM) — Ctrl+C to quit
+ram: ## RAM used by the engine (dockerd + containerd + proxies)
+##@ Stacks
+stacks: ## List stacks with their source directory
+stack-start: ## Start ALL containers in a stack [stack]
+stack-stop: ## Stop ALL containers in a stack [stack]
+stack-restart: ## Restart ALL containers in a stack [stack]
+stack-logs: ## Last 30 lines of EACH container in the stack [stack]
+stack-rm: ## DANGER: delete a stack's containers (volumes are kept) [stack]
+##@ Containers
+logs: ## Last 200 log lines [name]
+tail: ## Live log [name]
+sh: ## Shell inside the container [name]
+dex: ## Typo-proof exec: dex <container> [command]
+inspect: ## Inspect a container as JSON [name]
+start: ## Start a container [name]
+stop: ## Stop a container [name]
+restart: ## Restart a container [name]
+kill-all: ## Stop ALL running containers
+##@ Volumes
+volume-inspect: ## Show a volume's details [name]
+volume-tree: ## List a volume's contents [name]
+volume-backup: ## Back a volume up to ./backups [name]
+volume-backup-all: ## Back ALL volumes up to ./backups
+volume-restore: ## Restore a volume from ./backups [name]
+volumes-orphan: ## Volumes no container is using
+##@ Cleanup
+clean: ## Safe cleanup: stopped containers, dangling images, unused networks
+clean-build: ## Empty the build cache (frees a fair amount of disk)
+clean-hard: ## DANGER: delete unused images and cache (volumes are kept)
+rm-image: ## Delete an image [repo:tag]
+##@ Engine
+engine: ## Native daemon status (the tray icon Desktop used to give you)
+ctx: ## Show available contexts
