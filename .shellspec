@@ -16,7 +16,13 @@
 ## ShellSpec y el porcentaje sale sobre ~7800 líneas que no son tuyas.
 ## Se mide src/scripts/ y nada más: i18n/ son datos y medir los tests no dice nada.
 --kcov-options "--include-path=src/scripts/"
---kcov-options "--exclude-pattern=/src/tests/,/vendor/,/src/i18n/,.jq"
+#
+# bundle-main.sh queda fuera y NO por comodidad: solo se ejecuta con DCC_BUNDLE
+# puesto, o sea dentro del fichero único, que bundle_spec.sh lanza como PROCESO
+# APARTE — kcov instrumenta esta suite, no a sus hijos. Está probado de punta a
+# punta (arranque, las 4 rutas del despacho, códigos de salida); dejarlo dentro
+# solo pinta un 0 % falso que invita a escribir un test de mentira para taparlo.
+--kcov-options "--exclude-pattern=/src/tests/,/vendor/,/src/i18n/,.jq,bundle-main.sh"
 
 # Si un fichero deja de casar el patrón, la suite correría 0 ejemplos y saldría
 # en verde. Un 0 en verde es peor que un fallo.

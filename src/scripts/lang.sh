@@ -7,7 +7,7 @@ set -uo pipefail
 # ganándole al .config.
 ENV_LANG=${DCC_LANG:-}
 # shellcheck source=src/scripts/common.sh
-. "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+declare -F pad >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 # Los da common.sh: la fuente cambia entre repositorio y bundle.
 codes()   { dcc_languages; }
@@ -24,7 +24,7 @@ write_cfg() {
 	dir=$(dirname "$DCC_CONFIG")
 	# Si existe y NO es un fichero normal, fuera: el mv de abajo reemplazaría un
 	# nodo de dispositivo. Con DCC_CONFIG=/dev/null y suficientes permisos, esto
-	# se cargaría /dev/null. El `cp` de antes no tenía ese riesgo.
+	# se cargaría /dev/null.
 	if [ -e "$DCC_CONFIG" ] && [ ! -f "$DCC_CONFIG" ]; then return 1; fi
 	# Puede no existir: es la primera vez que se guarda una preferencia.
 	mkdir -p "$dir" 2>/dev/null || return 1
@@ -34,13 +34,9 @@ write_cfg() {
 	# borrar, y un lector podría ver el fichero a medias.
 	tmp=$(mktemp "$dir/.config.XXXXXX" 2>/dev/null) || return 1
 
-	# Un solo camino de éxito y una sola limpieza. Nada de `trap … RETURN`: $tmp
-	# es local y ya ha muerto cuando el trap se ejecuta, así que con `set -u`
-	# aborta la función.
-	#
-	# El estado del `mv` es el de la función. Antes acababa en
-	# `cp …; rm -f "$tmp"`, o sea que devolvía el del rm —siempre 0— y apply()
-	# pintaba "✓ Guardado en …" con la escritura fallada.
+	# Nada de `trap … RETURN`: $tmp es local y ya ha muerto cuando el trap corre,
+	# y con `set -u` aborta la función. El estado del `mv` tiene que ser el de la
+	# función: acabar en `rm -f "$tmp"` devolvía siempre 0 y apply() pintaba el ✓.
 	{
 		if [ -r "$DCC_CONFIG" ]; then
 			while IFS= read -r line || [ -n "$line" ]; do
@@ -148,6 +144,6 @@ done
 }
 
 # Define al cargarse; ejecuta solo si lo lanzas directo.
-if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+if [ -z "${DCC_BUNDLE:-}" ] && [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 	lang_main "$@"
 fi

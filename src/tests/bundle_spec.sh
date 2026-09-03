@@ -1,8 +1,9 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034,SC2154,SC2215,SC2286,SC2288,SC2317,SC2329,SC1090,SC2016
 #
-# Tests del empaquetado. build.sh corta los `source` casando LÍNEAS EXACTAS:
-# partir en dos la de help.sh deja el repositorio en verde y el bundle ROTO.
+# Aquí el bundle se lanza como PROCESO, así que el cerrojo de spec_helper.sh no
+# llega: `docker()` es una función de bash y no cruza a un hijo. De ahí el docker
+# falso al frente del PATH — sin él, cada máquina daba un resultado distinto.
 
 # `slow:true` es una ETIQUETA (argumento del bloque, no una directiva `Set`), y
 # `--tag` solo INCLUYE: el bucle rápido filtra por fichero. Ver `make test-fast`.
@@ -12,10 +13,29 @@ Describe 'el fichero único' slow:true
 		BUNDLE_DIR=$(mktemp -d)
 		BUNDLE="$BUNDLE_DIR/dcc"
 		bash "$REPO_ROOT/build.sh" "$BUNDLE" >/dev/null 2>&1
+
+		# Mudos: aquí se comprueba el DESPACHO, no qué contesta docker. Fingir
+		# datos sería una segunda implementación; los render van en dashboard_spec.
+		FAKE_BIN="$BUNDLE_DIR/bin"; mkdir -p "$FAKE_BIN"
+		local c
+		for c in docker systemctl curl; do
+			printf '#!/bin/sh\nexit 0\n' >"$FAKE_BIN/$c"
+			chmod +x "$FAKE_BIN/$c"
+		done
+		ORIG_PATH=$PATH
+		PATH="$FAKE_BIN:$PATH"; export PATH
 	}
-	teardown() { rm -rf "$BUNDLE_DIR"; }
+	teardown() { PATH=$ORIG_PATH; rm -rf "$BUNDLE_DIR"; }
 	BeforeAll 'build'
 	AfterAll  'teardown'
+
+	# Si el falso dejara de interceptar, todo lo de abajo volvería a hablar con el
+	# docker de la máquina y nadie se enteraría: seguiría en verde.
+	It 'el docker falso intercepta de verdad'
+		resolved() { bash -c 'command -v docker'; }
+		When call resolved
+		The output should equal "$FAKE_BIN/docker"
+	End
 
 	It 'se genera, es ejecutable y es sintácticamente bash'
 		is_valid() { [ -f "$BUNDLE" ] && [ -x "$BUNDLE" ] && bash -n "$BUNDLE"; }
@@ -23,20 +43,20 @@ Describe 'el fichero único' slow:true
 		The status should be success
 	End
 
-	# Los `source` que quedan viven dentro de guardas que aquí no se disparan: lo
-	# que importa es que no se EJECUTEN, de ahí el arranque desde /tmp.
 	Describe 'NO depende de nada del disco'
-		It 'no queda ningún source al disco en el nivel superior'
-			loose_sources() { grep -n '^\. "' "$BUNDLE" || true; }
-			When call loose_sources
-			The output should be blank
-		End
-
-		# Ni indentado dentro de una guarda. La regla que los quitaba usaba `\s`,
-		# que no es POSIX: mawk no lo entendía y los dejaba pasar.
-		It 'tampoco queda ninguno indentado'
-			indented_sources() { grep -n '\. "\$DCC_DIR/' "$BUNDLE" || true; }
-			When call indented_sources
+		# Ficheros trampa con el nombre de los hermanos: si un `source` se disparara
+		# o una guarda se creyera la principal, gritarían. Prueba la PROPIEDAD —del
+		# disco no se carga nada— y no si build.sh supo reconocer una línea.
+		It 'no carga ningún hermano aunque estén ahí al lado'
+			decoys() {
+				local d f; d=$(mktemp -d); cp "$BUNDLE" "$d/dcc"
+				for f in common.sh engine-ram.sh container-cpu.sh; do
+					printf 'printf "BOOM %s\\n" >&2\n' "$f" >"$d/$f"
+				done
+				( cd "$d" && ./dcc version >/dev/null && ./dcc help >/dev/null ) 2>&1
+				rm -rf "$d"
+			}
+			When call decoys
 			The output should be blank
 		End
 
@@ -99,15 +119,12 @@ Describe 'el fichero único' slow:true
 	It 'un script nuevo entra en el bundle sin tocar build.sh'
 		auto_discovery() {
 			local tmp="$REPO_ROOT/src/scripts/zz-probe.sh" out
-			# La guarda va en la forma CANÓNICA de tres líneas: strip_module casa
-			# líneas exactas, y con la variante de una línea sobrevive al
-			# empaquetado y el módulo se ejecuta al cargarse.
+			# La guarda va en UNA línea A PROPÓSITO: el empaquetado ya no depende de
+			# cómo esté escrita, y este ejemplo es lo que lo demuestra.
 			cat >"$tmp" <<-'PROBE'
 				#!/usr/bin/env bash
 				zz_probe_main() { printf 'sonda-ok\n'; }
-				if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
-					zz_probe_main "$@"
-				fi
+				[ -z "${DCC_BUNDLE:-}" ] && [ "${BASH_SOURCE[0]}" = "${0}" ] && zz_probe_main "$@"
 			PROBE
 			out=$(mktemp -d)/dcc
 			bash "$REPO_ROOT/build.sh" "$out" >/dev/null 2>&1
@@ -133,6 +150,26 @@ Describe 'el fichero único' slow:true
 		}
 		When call bogus_module
 		The status should be success
+	End
+
+	# bundle_main() vivía en un heredoc de build.sh, donde shellcheck no entra.
+	# Ahora es src/scripts/bundle-main.sh y build.sh lo pega el ÚLTIMO a mano: si
+	# entrara por el descubrimiento automático, un `zz-*.sh` nuevo caería detrás y
+	# el despachador correría antes de que ese módulo existiera.
+	Describe 'el despachador'
+		It 'es lo último del fichero, después de todos los módulos'
+			last_definition() {
+				grep -n '^# --- ' "$BUNDLE" | tail -1 | sed 's/.*--- //; s/ .*//'
+			}
+			When call last_definition
+			The output should equal "bundle-main.sh"
+		End
+
+		It 'y su llamada es la última línea de todo'
+			last_line() { tail -1 "$BUNDLE"; }
+			When call last_line
+			The output should include "bundle_main"
+		End
 	End
 
 	It 'las 6 vistas están en la tabla'
@@ -183,7 +220,9 @@ Describe 'el fichero único' slow:true
 				esac
 				(cd /tmp && "$BUNDLE" "$c" >/dev/null 2>&1)
 				[ $? -eq 2 ] && broken+=" $c"
-			done < <(printf '%s\n' "$help_text" | grep -oE '^  [a-z][a-z-]*' | tr -d ' ')
+			# Misma clase de caracteres que dcc_parse_commands(): con `[a-z-]*` un
+			# comando con dígito (ps2) se saltaba en silencio y no se comprobaba.
+			done < <(printf '%s\n' "$help_text" | grep -oE '^  [a-z][a-z0-9-]*' | tr -d ' ')
 			printf '%s' "$broken"
 		}
 		When call broken_commands

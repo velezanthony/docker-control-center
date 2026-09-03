@@ -4,11 +4,12 @@
 set -uo pipefail
 
 # shellcheck source=src/scripts/common.sh
-. "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+declare -F pad >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 err() { printf "%s\n" "$*" >&2; }
 
-running() { docker ps --format '{{.Names}}' | sort; }
+# Ordenado: best_match recorre la lista y un empate debe resolverse igual siempre.
+running() { dcc_names | sort; }
 
 # Agrupados por stack; los sueltos, aparte. A stderr: acompaña a un error.
 print_available() {
@@ -117,19 +118,13 @@ if ! grep -qxF "$target" <<< "$list"; then
 	exit 1
 fi
 
-# -t solo con terminal en ambos extremos: en un pipe, docker aborta.
-flags=(-i)
-[ -t 0 ] && [ -t 1 ] && flags=(-i -t)
-
-if [ "$#" -eq 0 ]; then
-	printf "%s\n" "${D}$(tf dex_opening "${CY}${target}${R}${D}")${R}" >&2
-	docker exec "${flags[@]}" "$target" sh -c 'command -v bash >/dev/null 2>&1 && exec bash || exec sh'
-else
-	docker exec "${flags[@]}" "$target" "$@"
-fi
+# Sin comando, shell; con comando, ese comando. Los flags y la elección de
+# bash/sh viven en dcc_exec(), que comparte con `dcc sh`.
+[ "$#" -eq 0 ] && printf "%s\n" "${D}$(tf dex_opening "${CY}${target}${R}${D}")${R}" >&2
+dcc_exec "$target" "$@"
 }
 
 # Define al cargarse; ejecuta solo si lo lanzas directo.
-if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+if [ -z "${DCC_BUNDLE:-}" ] && [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 	dex_main "$@"
 fi

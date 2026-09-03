@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 # deps.sh — descarga a vendor/ lo que dice dependencies.txt.  [--force reinstala]
 #
-# No es un submódulo a propósito: metería un segundo repositorio git dentro del
-# tuyo, con paneles duplicados en el editor y commits accidentales en código
-# ajeno. El sha256 se verifica SIEMPRE y se aborta sin descomprimir si no cuadra.
-# El color va en el formato de printf, como en todo el proyecto.
-# shellcheck disable=SC2059
+# No es un submódulo a propósito: sería un segundo repositorio git dentro del
+# tuyo. El sha256 se verifica SIEMPRE y aborta sin descomprimir si no cuadra.
+# shellcheck disable=SC2059  # el color va en el formato de printf, como en todo el proyecto
 set -uo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)

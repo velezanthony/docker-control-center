@@ -40,7 +40,7 @@ engine_ram() {
 	fi
 }
 
-if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+if [ -z "${DCC_BUNDLE:-}" ] && [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 	# if/else y no `A && B || C`: si B fallara, C se ejecutaría también.
 	if [ "${1:-}" = "--list" ]; then engine_ram 1; else engine_ram 0; fi
 fi

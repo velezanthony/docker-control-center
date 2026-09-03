@@ -11,10 +11,8 @@ Describe 'fmt_status()'
 	status_of() { fmt_status <<<"$1" | cut -f1; }
 	health_of() { fmt_status <<<"$1" | cut -f2; }
 
-	# Docker imprime cadenas fijas de units.HumanDuration. Las tres con artículo
-	# tienen que tratarse ANTES que la abreviatura genérica: si no, " minutes?"
-	# se come el " minute" de "About a minute" y queda "About am". Ese bug estuvo
-	# en producción.
+	# Las tres con artículo van ANTES que la abreviatura genérica: si no,
+	# " minutes?" se come el " minute" de "About a minute" y queda "About am".
 	Describe 'abrevia las duraciones de Go'
 		Parameters
 			"Up About a minute"            "up ~1m"
@@ -87,9 +85,9 @@ Describe 'exit_code()'
 	End
 End
 
-# La tabla que decide qué pinta cada `make ps` / `make status` / `dcc images`.
-# Fuente ÚNICA: la consultan el Makefile y el despachador del fichero único, así
-# que un cambio aquí se propaga a los dos sin que nadie lo anuncie.
+# La tabla que decide qué pinta cada `dcc ps` / `dcc status` / `dcc images`.
+# Fuente ÚNICA: la consulta el despachador, así que un cambio aquí se propaga a
+# todas las vistas sin que nadie lo anuncie.
 Describe 'dcc_view_sections()'
 	Include src/scripts/dashboard.sh
 
@@ -137,22 +135,83 @@ Describe 'want()'
 	End
 End
 
+# En el fichero único TODOS los módulos se cargan en CADA invocación, así que un
+# `tput` a nivel de módulo lo pagaba hasta `dcc version`, que no pinta una regla
+# en su vida. Se calcula la primera vez que hace falta y se queda cacheado.
+Describe 'la anchura del terminal es perezosa'
+	Include src/scripts/dashboard.sh
+
+	setup()   { WTMP=$(mktemp -d); }
+	cleanup() { rm -rf "$WTMP"; }
+	BeforeEach 'setup'
+	AfterEach  'cleanup'
+
+	It 'no se calcula al cargar el módulo'
+		width_at_load() { printf '%s' "$W"; }
+		When call width_at_load
+		The output should be blank
+	End
+
+	# El registro va a FICHERO: `W=$(tput cols)` corre en subshell y un contador en
+	# variable volvería siempre a cero — el test pasaría aunque no cacheara nada.
+	It 'las siguientes ya no preguntan al terminal'
+		asks_once() {
+			: >"$WTMP/tput.log"
+			tput() { printf 'x' >>"$WTMP/tput.log"; printf '80'; }
+			rule >/dev/null; rule >/dev/null; rule >/dev/null
+			printf '%s' "$(<"$WTMP/tput.log")"
+		}
+		When call asks_once
+		The output should equal "x"
+	End
+
+	Describe 'y sigue acotada entre 60 y 110'
+		Parameters
+			"200" "110"
+			"40"  "60"
+			"90"  "90"
+		End
+
+		# `cols` es local de clamped(), pero bash tiene ámbito DINÁMICO: sigue vivo
+		# cuando ensure_width llama al doble. Dentro de tput(), $1 sería "cols".
+		It "un terminal de $1 columnas da $2"
+			clamped() { local cols=$1; tput() { printf '%s' "$cols"; }; rule >/dev/null; printf '%s' "$W"; }
+			When call clamped "$1"
+			The output should equal "$2"
+		End
+	End
+End
+
 Describe 'parse_args()'
 	Include src/scripts/dashboard.sh
 
-	Describe 'traduce los alias en español a los nombres canónicos'
+	# `*) shift` se los tragaba: `--onl stacks` daba el panel entero y nadie se
+	# enteraba de que el filtro no se había aplicado.
+	Describe 'lo que no entiende NO lo ignora'
 		Parameters
-			"resumen,disco"      "summary,disk"
-			"ps"                 "stacks"          # ps es la vista de stacks
-			"volumenes,imagenes" "volumes,images"
+			--onl        "un typo del propio flag"
+			--only-stack "un flag parecido que no existe"
+			basura       "una palabra suelta"
 		End
 
-		It "--only $1 -> $2"
-			When call parse_args --only "$1"
-			The variable ONLY should eq "$2"
+		It "rechaza $1: $2"
+			When call parse_args "$1"
+			The status should eq 2
+			The stderr should include "$1"
 		End
 	End
 
+	# `--only` sin valor moría con "unbound variable" de set -u: el mensaje lo
+	# daba bash, no la herramienta.
+	It 'un --only sin valor lo dice la herramienta, no el intérprete'
+		When call parse_args --only
+		The status should eq 2
+		The stderr should include "--only"
+		The stderr should not include "unbound"
+	End
+
+	# Sin argumentos pasan las seis secciones enteras y salen intactas: es lo que
+	# vigila que no vuelva una sustitución de subcadena sobre ONLY.
 	It 'sin argumentos pide todas las secciones'
 		When call parse_args
 		The variable ONLY should eq "$ALL_SECTIONS"
@@ -355,6 +414,17 @@ Describe 'las piezas en que se partió render_stacks'
 		End
 	End
 
+	# La rama que faltaba: ni vivo ni con código de salida. Es el estado real de
+	# un contenedor "Created", que nunca llegó a arrancar y por tanto nunca
+	# salió con nada. Sin este ejemplo, el `else` no lo pisaba nadie.
+	Describe 'severity_cell() sin código de salida'
+		It 'un contenedor Created va en gris, no en rojo'
+			When call severity_cell created ""
+			The output should include "$D"
+			The output should not include "$RD"
+		End
+	End
+
 	Describe 'health_mark()'
 		Parameters
 			"+" "✓"
@@ -425,7 +495,7 @@ Describe 'las secciones del panel'
 	# limpio. Y cada una lleva el comando exacto que la resuelve.
 	Describe 'render_summary()'
 		setup() {
-			DCC_CMD="make"
+			DCC_CMD="make run"
 			M=(
 				[disk]="21.4 GB"  [trash]="6.1 GB"
 				[cacheRaw]=1 [cacheSz]="4.2 GB" [cacheN]=12
@@ -448,8 +518,24 @@ Describe 'las secciones del panel'
 		It 'cada fila sugiere el comando que la limpia'
 			the_summary() { render_summary | plain; }
 			When call the_summary
-			The output should include "make clean-build"
-			The output should include "make volumes-orphan"
+			The output should include "make run clean-build"
+			The output should include "make run volumes-orphan"
+		End
+
+		# El prefijo era `make` a secas y el Makefile no tiene NI UN target de
+		# producto: sugería `make clean`, que no existe. Lo que se sugiera tiene
+		# que existir, o es peor que no sugerir nada.
+		It 'lo que sugiere está anunciado de verdad en commands.txt'
+			unannounced() {
+				local c
+				while read -r c; do
+					[ -n "$c" ] || continue
+					grep -qE "^${c}:" "$REPO_ROOT/src/commands.txt" || printf '%s ' "$c"
+				done < <(grep -oE "DCC_CMD [a-z][a-z0-9-]*" "$REPO_ROOT/src/scripts/dashboard.sh" \
+				         | cut -d' ' -f2 | sort -u)
+			}
+			When call unannounced
+			The output should be blank
 		End
 
 		# El fichero único se llama `dcc`, no `make`. Sugerir `make clean` a quien
@@ -458,7 +544,7 @@ Describe 'las secciones del panel'
 			as_bundle() { DCC_CMD=dcc; render_summary | plain; }
 			When call as_bundle
 			The output should include "dcc clean-build"
-			The output should not include "make clean-build"
+			The output should not include "make run clean-build"
 		End
 
 		It 'una fuente vacía NO saca fila'
@@ -518,10 +604,8 @@ Describe 'las secciones del panel'
 			The output should include "antiguo"
 		End
 
-		# `paste -sd", "` trata su argumento como una LISTA de delimitadores que
-		# ROTA: con dos muertos daba "a (1), b (2)" y colaba; con TRES daba
-		# "a (1), b (2) c (3)" — el tercero separado por un espacio suelto. Y tres
-		# contenedores caídos a la vez es el día normal de quien mira esta sección.
+		# `paste -sd", "` trata su argumento como una LISTA que ROTA: con dos
+		# colaba, y con TRES daba "a (1), b (2) c (3)". Por eso el caso son tres.
 		It 'con TRES muertos el separador NO cambia a mitad de lista'
 			three_dead() {
 				PSDATA=$(printf '%s\n' \
@@ -570,6 +654,68 @@ Describe 'las secciones del panel'
 			no_sizes() { M=(); render_disk | plain; }
 			When call no_sizes
 			The output should include "No size data"
+		End
+	End
+
+	# No tenía NI UN test, y es la sección con dos caminos: con tamaños (jq sobre
+	# df.json) y sin ellos (`docker volume ls`). Los dos pintan la misma fila, así
+	# que los dos se comprueban.
+	Describe 'render_volumes()'
+		no_jq() { ! command -v jq >/dev/null 2>&1; }
+
+		setup() {
+			TMP=$(mktemp -d)
+			M=([disk]="21.4 GB")
+			cat >"$TMP/df.json" <<-'JSON'
+				{"Volumes":[
+				  {"Name":"datos","UsageData":{"Size":31000000,"RefCount":1}},
+				  {"Name":"sobras","UsageData":{"Size":9000000,"RefCount":0}}
+				]}
+			JSON
+			# Formato de read_containers: /contenedor y sus volúmenes detrás.
+			VOLMAP='/web-1 datos'
+			docker() { case "$*" in "volume ls -q") printf 'datos\nsobras\n' ;; esac; return 0; }
+		}
+		cleanup() { rm -rf "$TMP"; }
+		BeforeEach 'setup'
+		AfterEach  'cleanup'
+
+		It 'con tamaños: nombre, tamaño y quién lo usa'
+			Skip if "no hay jq" no_jq
+			the_volumes() { render_volumes | plain; }
+			When call the_volumes
+			The output should include "datos"
+			The output should include "31 MB"
+			The output should include "web-1"
+		End
+
+		It 'con RefCount 0 lo marca huérfano aunque nadie pregunte'
+			Skip if "no hay jq" no_jq
+			orphan_row() { render_volumes | plain | grep sobras; }
+			When call orphan_row
+			The output should include "orphan"
+		End
+
+		# El camino sin df.json pintaba la MISMA fila con otro printf: la copia es
+		# lo que se va de la otra en cuanto alguien toque el formato.
+		It 'sin tamaños sigue diciendo quién usa cada volumen'
+			no_sizes() { M=(); render_volumes | plain; }
+			When call no_sizes
+			The output should include "datos"
+			The output should include "web-1"
+			The output should include "—"
+		End
+
+		It 'sin tamaños el que no usa nadie sale huérfano igual'
+			no_sizes() { M=(); render_volumes | plain | grep sobras; }
+			When call no_sizes
+			The output should include "orphan"
+		End
+
+		It 'sin volúmenes lo dice en vez de dejar una cabecera suelta'
+			none() { docker() { return 0; }; render_volumes | plain; }
+			When call none
+			The output should include "(none)"
 		End
 	End
 

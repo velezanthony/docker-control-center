@@ -58,7 +58,13 @@ markdown_extensions:
       line_spans: __span
       pygments_lang_class: true
   - pymdownx.inlinehilite
-  - pymdownx.snippets
+  # base_path en la raíz: así docs/ puede incluir CONTRIBUTING.md, CHANGELOG.md y
+  # SECURITY.md SIN copiarlos. GitHub los quiere en la raíz y el sitio los quiere
+  # publicados: una sola fuente, dos escaparates.
+  # check_paths convierte un fichero que falte en ERROR, no en una página vacía.
+  - pymdownx.snippets:
+      base_path: ["."]
+      check_paths: true
   - pymdownx.superfences
   - pymdownx.tabbed:
       alternate_style: true
@@ -98,7 +104,12 @@ plugins:
             Installation: Instalación
             Commands: Comandos
             Language: Idioma
+            Limitations: Limitaciones
             Contributing: Contribuir
+            Bash & ShellSpec: Bash y ShellSpec
+            How to contribute: Cómo contribuir
+            Changelog: Cambios
+            Security: Seguridad
 
 nav:
   - Home: index.md
@@ -106,11 +117,15 @@ nav:
       - Installation: users/installation.md
       - Commands: users/commands.md
       - Language: users/language.md
+      - Limitations: users/limitations.md
   # Solo se listan páginas que EXISTEN: una entrada a un fichero que falta
   # rompe `mkdocs build --strict`. Las de conventions, testing y releasing
   # estaban declaradas y sin escribir.
   - Contributing:
+      - How to contribute: contributing.md
       - Bash & ShellSpec: contributors/engineering.md
+  - Changelog: changelog.md
+  - Security: security.md
 
 extra:
   social:

@@ -12,10 +12,13 @@ CY=$'\033[36m'; GR=$'\033[32m'; YE=$'\033[33m'; RD=$'\033[31m'
 
 DCC_VERSION="0.9.0"
 
-DCC_CMD=${DCC_CMD:-make}   # `make <target>` en el repo, `dcc <comando>` en el bundle
+# `make run <comando>` en el repo y `dcc <comando>` en el bundle. `make` a secas
+# no vale: el Makefile no tiene NI UN target de producto.
+DCC_CMD=${DCC_CMD:-make run}
 
-# La cabecera de la ayuda dice cosas distintas según dónde estés: el Makefile
-# solo tiene targets de desarrollo, el bundle solo comandos del producto.
+# DCC_BUNDLE lo pone el fichero único, y hace dos cosas: cambia la cabecera de
+# la ayuda y apaga la guarda del final de cada script — allí todo vive en un
+# fichero, así que BASH_SOURCE[0] y $0 coinciden siempre.
 DCC_USAGE_KEY=help_usage
 DCC_HINT_KEY=help_hint
 if [ -n "${DCC_BUNDLE:-}" ]; then
@@ -121,23 +124,55 @@ dcc_load_language() {
 	fi
 }
 
-dcc_version_info() {
-	printf "${B}%s${R} %s\n" "$(t help_title)" "$DCC_VERSION"
-	printf "  bash    %s\n" "${BASH_VERSION%%(*}"
-	local c
-	for c in docker jq curl awk tput; do
-		if command -v "$c" >/dev/null; then printf "  %-7s %s\n" "$c" "$(command -v "$c")"
-		else printf "  ${YE}%-7s %s${R}\n" "$c" "$(t not_installed)"; fi
-	done
-	printf "  idioma  %s (%s)\n" "$DCC_LANG_RESOLVED" "$DCC_LANG_ORIGIN"
-	printf "  config  %s\n" "$DCC_CONFIG"
+# --- Docker: lo poco que comparten dex.sh y ops.sh ----------------------------
+# Aquí y no en ops.sh porque el orden de carga del bundle pone dex ANTES que ops.
+
+dcc_names()     { docker ps    --format '{{.Names}}'; }
+dcc_names_all() { docker ps -a --format '{{.Names}}'; }
+
+# `-t` solo con terminal en AMBOS extremos: en una tubería `docker exec -it`
+# aborta con "the input device is not a TTY". Sin comando abre una shell,
+# prefiriendo bash y cayendo a sh.
+dcc_exec() {
+	local name=$1; shift
+	local flags=(-i)
+	[ -t 0 ] && [ -t 1 ] && flags=(-i -t)
+	if [ "$#" -eq 0 ]; then
+		docker exec "${flags[@]}" "$name" sh -c 'command -v bash >/dev/null 2>&1 && exec bash || exec sh'
+	else
+		docker exec "${flags[@]}" "$name" "$@"
+	fi
 }
 
-# Los comandos que la herramienta ANUNCIA: fichero en el repositorio, variable
-# incrustada en el bundle — la misma dualidad que los catálogos.
+dcc_version_info() {
+	printf "${B}%s${R} %s\n" "$(t help_title)" "$DCC_VERSION"
+	printf "  %-8s %s\n" "bash" "${BASH_VERSION%%(*}"
+	local c
+	for c in docker jq curl awk tput; do
+		if command -v "$c" >/dev/null; then printf "  %-8s %s\n" "$c" "$(command -v "$c")"
+		else printf "  ${YE}%-8s %s${R}\n" "$c" "$(t not_installed)"; fi
+	done
+	# La etiqueta se traduce: "language" mide 8 y por eso la columna es 8, no 7.
+	printf "  %-8s %s (%s)\n" "$(t version_language)" "$DCC_LANG_RESOLVED" "$DCC_LANG_ORIGIN"
+	printf "  %-8s %s\n" "config" "$DCC_CONFIG"
+}
+
+# El formato `nombre: ## texto`, con secciones `##@`, se parsea AQUÍ y en ningún
+# otro sitio: con más de una regla, la ayuda acaba prometiendo comandos que
+# dispatch rechaza por desconocidos.
 #
-# Se cachea porque dispatch la consulta dos veces por invocación y cada una eran
-# dos forks (cat + awk) leyendo un fichero que no cambia durante la ejecución.
+# $1 = names (solo el nombre) · lines (secciones + comandos). Lee de la entrada
+# estándar: así se le da un fichero o la variable que el bundle lleva dentro.
+dcc_parse_commands() {
+	awk -v mode="${1:-lines}" '
+		/^##@ /                { if (mode != "names") print; next }
+		/^[a-z][a-z0-9-]*:.*##/ { if (mode == "names") { sub(/:.*/, ""); print } else print }
+	'
+}
+
+# Lo que la herramienta ANUNCIA: fichero en el repositorio, variable incrustada
+# en el bundle — la misma dualidad que los catálogos. Se cachea porque dispatch
+# lo consulta dos veces por invocación y cada una eran dos forks.
 DCC_ANNOUNCED_CACHE=""
 dcc_announced() {
 	[ -n "$DCC_ANNOUNCED_CACHE" ] || DCC_ANNOUNCED_CACHE=$(
@@ -145,7 +180,7 @@ dcc_announced() {
 			printf '%s\n' "$DCC_HELP_SRC"
 		else
 			cat "$DCC_ROOT/commands.txt" 2>/dev/null
-		fi | awk -F: '/^[a-z][a-z0-9-]*:.*##/ { print $1 }'
+		fi | dcc_parse_commands names
 	)
 	printf '%s\n' "$DCC_ANNOUNCED_CACHE"
 }

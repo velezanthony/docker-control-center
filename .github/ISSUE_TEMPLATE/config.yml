@@ -1,1 +1,18 @@
+# Sin incidencia en blanco: las dos plantillas cubren los dos casos reales, y un
+# formulario vacío llega sin versión, sin distribución y sin cómo reproducirlo.
 blank_issues_enabled: false
+
+# Se enseñan ANTES del formulario. El de seguridad está aquí y no solo en
+# SECURITY.md porque ese fichero hay que ir a buscarlo: quien va a abrir una
+# incidencia pasa por esta pantalla, y es el último momento para evitar que
+# publique un fallo explotable en un hilo abierto.
+contact_links:
+  - name: Documentation
+    url: https://velezanthony.github.io/docker-control-center/
+    about: Check the docs first — most "how do I…" questions are covered there.
+  - name: Known limitations
+    url: https://velezanthony.github.io/docker-control-center/users/limitations/
+    about: What the tool does not do, does badly, or does quietly. Check before reporting a bug.
+  - name: Security vulnerability
+    url: https://github.com/velezanthony/docker-control-center/security/advisories/new
+    about: Report a security issue privately via GitHub Security Advisories. Do not open a public issue.

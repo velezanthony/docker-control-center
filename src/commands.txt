@@ -39,9 +39,9 @@ kill-all: ## Stop ALL running containers
 ##@ Volumes
 volume-inspect: ## Show a volume's details [name]
 volume-tree: ## List a volume's contents [name]
-volume-backup: ## Back a volume up to ./backups [name]
-volume-backup-all: ## Back ALL volumes up to ./backups
-volume-restore: ## Restore a volume from ./backups [name]
+volume-backup: ## Back a volume up to backups/ [name]
+volume-backup-all: ## Back ALL volumes up to backups/
+volume-restore: ## Restore a volume from backups/ [name]
 volumes-orphan: ## Volumes no container is using
 ##@ Cleanup
 clean: ## Safe cleanup: stopped containers, dangling images, unused networks

@@ -1,6 +1,12 @@
 # Docker Control Center
 
+[![CI](https://github.com/velezanthony/docker-control-center/actions/workflows/ci.yml/badge.svg)](https://github.com/velezanthony/docker-control-center/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A Docker dashboard for the terminal. One bash file, no daemon, nothing resident.
+
+📚 **Docs:** <https://velezanthony.github.io/docker-control-center/> ·
+**[Limitations](https://velezanthony.github.io/docker-control-center/users/limitations/)**
 
 ```console
 $ dcc dash
@@ -57,15 +63,32 @@ have this UI.
 
 ## Install
 
+**Nothing has been released yet** — the repository carries no tags, so there is
+nothing at `releases/latest` to download. Until the first one, build it:
+
 ```bash
-curl -LO https://github.com/velezanthony/docker-control-center/releases/latest/download/docker-control-center.sh
-chmod +x docker-control-center.sh
-mv docker-control-center.sh ~/.local/bin/dcc
+git clone https://github.com/velezanthony/docker-control-center
+cd docker-control-center && make link
+```
+
+`make link` symlinks the build into `~/.local/bin`, so `make bundle` is enough
+to update `dcc`.
+
+<details>
+<summary><b>From the first release on</b></summary>
+
+```bash
+curl -LO https://github.com/velezanthony/docker-control-center/releases/latest/download/dcc
+chmod +x dcc && mv dcc ~/.local/bin/
 dcc
 ```
 
-~80 KB, no dependencies beyond `docker`, `bash` and `awk`. The name you give the
-file is the name it answers to — rename freely.
+Under 90 KB, and beyond `docker`, `bash` 4+ and `awk` it needs only the usual
+POSIX utilities. Not quite zero, though: `volume-tree`, `volume-backup`,
+`volume-backup-all` and `volume-restore` pull the `alpine` image from Docker
+Hub to work inside the volume — pick another with `HELPER_IMAGE=busybox`. The
+name you give the file is the name it answers to — rename freely.
+</details>
 
 <details>
 <summary><b><code>dcc: command not found</code> on Debian or Ubuntu?</b></summary>
@@ -86,15 +109,6 @@ Fedora and RHEL add it via `/etc/profile.d/`. On Arch and Alpine you add it
 yourself.
 </details>
 
-From source:
-
-```bash
-git clone https://github.com/velezanthony/docker-control-center
-cd docker-control-center && make link
-```
-
-`make link` symlinks the build, so `make bundle` is enough to update `dcc`.
-
 ## Language
 
 English and Spanish, picked from your `$LANG`. Change it with `dcc lang es`;
@@ -103,28 +117,47 @@ it is stored in `~/.config/dcc/config` and applies to every command.
 ## Requirements
 
 `docker`, `bash` 4+, `awk` (any — GNU extensions are avoided on purpose) and the
-usual POSIX utilities. Optional, and it degrades gracefully without them:
+usual POSIX utilities. These are optional — but only the first three degrade
+gracefully:
 
 | Missing | What you lose |
 |---|---|
 | `curl` | Sizes: no disk, no waste report |
 | `jq` | The same, plus `inspect` and `volume-inspect` |
 | `tput` | Width detection; assumes 100 columns |
-| `systemd` | Only `dcc engine` |
+| `systemctl` | Not graceful: `dcc engine` asks systemd, not Docker, so it announces `dockerd stopped` and tells you to run `sudo systemctl start docker` with the daemon running fine |
 
 Any Linux distro. Not macOS (bash 3.2, no native engine), not Windows.
 
+The full list of what it does not do, does badly, or does quietly:
+**[Limitations](https://velezanthony.github.io/docker-control-center/users/limitations/)**.
+
 ## Backups
 
-`dcc volume-backup` writes to a `backups/` directory **next to the tool**, not
-next to your shell. Point it elsewhere with `BACKUP_DIR=/safe/path`.
+`dcc volume-backup` writes to a `backups/` directory **beside the directory the
+tool lives in**, not next to your shell: installed at `~/.local/bin/dcc`,
+backups land in `~/.local/backups`. Point it elsewhere with
+`BACKUP_DIR=/safe/path`.
+
+The destination is always `<name>.tar.gz`, so every run overwrites that volume's
+previous backup without asking, and the tar is taken hot, with the containers
+running. Read [Limitations](https://velezanthony.github.io/docker-control-center/users/limitations/)
+before you rely on one.
 
 ## Docs
 
-Full documentation: **<https://velezanthony.github.io/docker-control-center/>**
-
 Hacking on it: [CONTRIBUTING.md](CONTRIBUTING.md) ·
 Vulnerabilities: [SECURITY.md](SECURITY.md) ·
-[MIT](LICENSE)
+Everything else: <https://velezanthony.github.io/docker-control-center/>
+
+## Support
 
 [![Sponsor](https://img.shields.io/github/sponsors/velezanthony?logo=githubsponsors&color=EA4AAA)](https://github.com/sponsors/velezanthony)
+
+If this saves you the Docker Desktop licence, consider
+[sponsoring its development](https://github.com/sponsors/velezanthony). It helps
+keep it maintained.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

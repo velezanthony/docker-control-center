@@ -1,7 +1,9 @@
 # ==============================================================================
 #  bytes.jq — formateador de bytes ÚNICO de todo el proyecto.
 #
-#  Módulo jq: se usa con  jq -L scripts 'include "bytes"; …'
+#  No es un módulo con `include`: se antepone como TEXTO al programa que lo
+#  necesita (JQ_BYTES en common.sh), porque el fichero único no lleva .jq que
+#  ofrecerle a jq -L.
 #
 #  Nada de numfmt: respeta el locale y escupe "5,1GB" (coma decimal, sin
 #  espacio) mientras jq da "8.88 GB" -> dos estilos en la misma pantalla.

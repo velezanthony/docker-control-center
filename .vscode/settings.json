@@ -26,10 +26,12 @@
 		"**/coverage/**": true
 	},
 
-	// El proyecto usa tabuladores (shfmt -i 0). Que el editor no meta espacios.
+	// Tabuladores, y NADA de formateo automático: ningún formateador de shell
+	// respeta el estilo compacto de este proyecto. El estilo lo fija `make lint`.
 	"[shellscript]": {
 		"editor.insertSpaces": false,
-		"editor.detectIndentation": false
+		"editor.detectIndentation": false,
+		"editor.formatOnSave": false
 	},
 
 	// dependencies.txt es una lista, no código: sin autoformato que la descuadre.

@@ -15,12 +15,16 @@
 	"recommendations": [
 		// shellcheck en vivo: es EL linter del proyecto, el mismo que `make lint`
 		"timonwong.shellcheck",
-		// shfmt: el formateador que usa `make fmt`
-		"mkhl.shfmt",
 		// Resaltado de shell bastante mejor que el que trae VS Code de serie
 		"jeff-hykin.better-shellscript-syntax",
 		// El Makefile es la puerta de entrada del proyecto
 		"ms-vscode.makefile-tools"
 	],
-	"unwantedRecommendations": []
+	// shfmt reformatea al guardar y NO respeta el estilo de este proyecto:
+	// estalla `f() { g; return; }` y `a) uno; return ;;` en tres líneas cada uno.
+	// Medido: 1333 líneas de diff sobre un árbol que nadie había tocado.
+	"unwantedRecommendations": [
+		"mkhl.shfmt",
+		"foxundermoon.shell-format"
+	]
 }

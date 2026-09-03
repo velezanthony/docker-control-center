@@ -1,13 +1,8 @@
 # shellcheck shell=bash
+# shellcheck disable=SC2034,SC2154,SC2215,SC2286,SC2288,SC2317,SC2329,SC2016  # falsos positivos del DSL
 #
-# El DSL dispara seis falsos positivos INHERENTES en shellcheck: las filas de
-# `Parameters` son datos, `When call` invoca indirecto, y `setup()` escribe lo
-# que otro bloque lee. SC2016: los `bash -c '...'` llevan $1 a propósito.
-# shellcheck disable=SC2034,SC2154,SC2215,SC2286,SC2288,SC2317,SC2329,SC2016
-#
-# Tests de src/scripts/container-cpu.sh. Al reloj se le pone un doble EN UN
-# FICHERO: `now_usec` se invoca dentro de $( ), o sea en una subshell, y una
-# variable no sobreviviría.
+# Al reloj se le pone un doble EN UN FICHERO: `now_usec` se invoca dentro de
+# $( ), o sea en subshell, y una variable no sobreviviría.
 
 # `Parameters` aplica a TODO el Describe que lo contiene, no al `It` siguiente:
 # por eso cada tabla vive en su propio Describe anidado.
@@ -145,11 +140,9 @@ Describe 'container_cpu()'
 	End
 End
 
-# EPOCHREALTIME es de bash 5.0 y el proyecto declara bash 4+. En bash 4 la
-# variable no existe y, con `set -u`, leerla aborta el script entero.
-#
-# Las dos ramas se piden en un bash NUEVO: sustituir now_usec aquí y
-# preguntarle al doble no demostraría nada.
+# EPOCHREALTIME es de bash 5.0 y el proyecto declara bash 4+, donde leerla con
+# `set -u` aborta el script. Las dos ramas se piden en un bash NUEVO: doblar
+# now_usec aquí y preguntarle al doble no demostraría nada.
 Describe 'now_usec()'
 	with_epoch()    { bash -c '. "$1"; now_usec' _ "$REPO_ROOT/src/scripts/container-cpu.sh"; }
 	without_epoch() { EPOCHREALTIME="" bash -c '. "$1"; now_usec' _ "$REPO_ROOT/src/scripts/container-cpu.sh"; }

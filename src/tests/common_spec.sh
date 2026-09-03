@@ -36,13 +36,9 @@ Describe 'rpad()'
 	End
 End
 
-# Con IFS=TAB bash colapsa los separadores seguidos y todo se corre un puesto.
-# Es EXACTAMENTE el bug que hacía que un contenedor sin puertos perdiera el
-# nombre de servicio y mostrara el proyecto en la columna de imagen.
-#
-# OJO: $SEP es \x1f y NO puede viajar por los argumentos de `When` — choca con el
-# protocolo de reporte de ShellSpec y aborta la suite con código 102 aunque los
-# tests pasen. Por eso cada caso arma su cadena DENTRO de la función.
+# Con IFS=TAB bash colapsa los separadores seguidos y la fila se corre un puesto.
+# OJO: $SEP (\x1f) no puede viajar por los argumentos de `When` — aborta la suite
+# con código 102 aunque los tests pasen. Cada caso arma su cadena DENTRO.
 Describe 'SEP'
 	Include src/scripts/common.sh
 
@@ -249,11 +245,9 @@ Describe 'dcc_load_language()'
 		The output should equal "env"
 	End
 
-	# Aquí solo hace falta el VALOR de la variable: dcc_load_language casa el
-	# patrón de la cadena, no cambia el locale del proceso. Pero el prefijo
-	# `LC_ALL=… cmd` SÍ intenta aplicarlo, y bash avisa por stderr si no está
-	# generado — en un contenedor limpio eso tumbaba el ejemplo. Se asigna dentro
-	# de la función, donde no hay setlocale de por medio.
+	# Solo hace falta el VALOR: dcc_load_language casa el patrón, no cambia el
+	# locale. Pero el prefijo `LC_ALL=… cmd` sí intenta aplicarlo y bash avisa por
+	# stderr si no está generado. Por eso se asigna DENTRO de la función.
 	It 'sabe que el idioma vino del locale'
 		origin_of() {
 			unset DCC_LANG
@@ -264,12 +258,9 @@ Describe 'dcc_load_language()'
 	End
 End
 
-# Lo primero que se le pide a quien reporta un fallo. Una sola implementación
-# para `make version` y para el fichero único: antes eran dos copias.
 # Los catálogos se cargan con `source`, así que unas comillas invertidas o un
 # $( ) no son texto: son EJECUCIÓN. Pasó con [help_link]="… `dcc` …", que
-# intentaba ejecutar dcc al cargar el catálogo y reventaba `make run` entero.
-# ${DCC_CMD} sí vale: es expansión de parámetro, no de comando.
+# reventaba `make run` entero. ${DCC_CMD} sí vale: es expansión de parámetro.
 Describe 'los catálogos son datos, no código'
 	It 'ninguno ejecuta comandos al cargarse'
 		command_substitution() {
@@ -277,6 +268,252 @@ Describe 'los catálogos son datos, no código'
 			return 0
 		}
 		When call command_substitution
+		The output should be blank
+	End
+End
+
+# El formato `nombre: ## texto` se parseaba en CUATRO sitios con cuatro reglas
+# distintas. Ahora en uno. Estos son los casos que las hacían discrepar.
+Describe 'dcc_parse_commands()'
+	Include src/scripts/common.sh
+
+	Describe 'names: qué cuenta como comando'
+		Parameters
+			'dash: ## texto'        dash          'lo normal'
+			'stack-start: ## texto' stack-start   'con guión'
+			'ps2: ## texto'         ps2           'con dígito'
+			'psa: ps  ## alias'     psa           'con dependencia delante del ##'
+		End
+
+		It "$3"
+			names_of() { printf '%s\n' "$1" | dcc_parse_commands names; }
+			When call names_of "$1"
+			The output should equal "$2"
+		End
+	End
+
+	Describe 'names: qué NO cuenta, y por eso dispatch lo rechazaba'
+		Parameters
+			'Foo: ## texto'       'empieza por mayúscula'
+			'mi_target: ## texto' 'lleva guión bajo'
+			'.PHONY: help'        'no lleva ##'
+			'# dash: ## texto'    'es un comentario'
+			'##@ Overview'        'es una sección, no un comando'
+		End
+
+		It "$2"
+			names_of() { printf '%s\n' "$1" | dcc_parse_commands names; }
+			When call names_of "$1"
+			The output should be blank
+		End
+	End
+
+	It 'lines conserva las secciones y names las descarta'
+		both() {
+			printf '##@ Overview\ndash: ## texto\n' | dcc_parse_commands lines
+			printf -- '---\n'
+			printf '##@ Overview\ndash: ## texto\n' | dcc_parse_commands names
+		}
+		When call both
+		The output should equal "##@ Overview
+dash: ## texto
+---
+dash"
+	End
+
+	# Un `case` de bash lo daba por bueno porque el TAB no cuenta como \t en el
+	# patrón. El awk ancla en el principio de línea y no hay discusión.
+	It 'una receta sangrada con TAB que lleva : y ## no es un comando'
+		recipe() { printf '\t@printf "no: soy ## un comentario"\n' | dcc_parse_commands names; }
+		When call recipe
+		The output should be blank
+	End
+End
+
+# El pie del panel decía, LITERALMENTE, "dcc help · make clean · make clean-build".
+# Quien se baja el fichero suelto no tiene Makefile: se le mandaba a un comando
+# que no existe en su máquina. Y las docs prometían `make dash`, `make logs` y
+# `make volume-backup-all`, que tampoco son targets. El prefijo lo pone DCC_CMD.
+#
+# `make lang` sí vale: es un target de verdad. La regla no es "nada de make",
+# es "nada de `make <algo>` que no exista".
+Describe 'nadie promete un make que no existe'
+	# Los comandos del producto que NO son además un target del Makefile.
+	fake_targets() {
+		local c
+		while read -r c; do
+			[ -n "$c" ] || continue
+			grep -qE "^${c}:" "$REPO_ROOT/Makefile" || printf '%s\n' "$c"
+		done < <(grep -oE '^[a-z][a-z0-9-]*:' "$REPO_ROOT/src/commands.txt" | tr -d ':')
+	}
+
+	It 'ni los catálogos, en sus líneas de VALOR'
+		# Solo las líneas de valor: un comentario `# --- make help ---` no le
+		# promete nada a nadie.
+		in_catalogs() {
+			local c f
+			while read -r c; do
+				for f in "$REPO_ROOT"/src/i18n/*.sh; do
+					grep -E '^[[:blank:]]*\[[a-z0-9_-]+\]=' "$f" \
+					| grep -E "make ${c}([^a-z0-9-]|$)" \
+					| sed "s|^|$(basename "$f") |"
+				done
+			done < <(fake_targets)
+			return 0
+		}
+		When call in_catalogs
+		The output should be blank
+	End
+
+	# docs/ y el README son la promesa que lee alguien que aún no ha clonado nada.
+	# El .gitignore entró después: su aviso —el que evita publicar tus volúmenes—
+	# mandaba a `make volume-backup` y sobrevivió a la mudanza de los comandos
+	# justo porque esta lista no lo miraba.
+	#
+	# CONTRIBUTING.md se queda FUERA a propósito: ahí `make clean` aparece citado
+	# como el ejemplo de lo que la regla prohíbe, y prohibir el antipatrón en el
+	# texto que lo explica deja la regla sin poder enseñarse.
+	It 'ni la documentación, ni el README, ni el .gitignore'
+		in_docs() {
+			local c f
+			while read -r c; do
+				for f in "$REPO_ROOT"/docs/*.md "$REPO_ROOT"/docs/*/*.md \
+				         "$REPO_ROOT/README.md" "$REPO_ROOT/.gitignore"; do
+					[ -f "$f" ] || continue
+					grep -nE "make ${c}([^a-z0-9-]|$)" "$f" | sed "s|^|$(basename "$f"):|"
+				done
+			done < <(fake_targets)
+			return 0
+		}
+		When call in_docs
+		The output should be blank
+	End
+End
+
+# El asset de una release toma el BASENAME del fichero que sube el workflow. Se
+# publicaba como docker-control-center.sh mientras el README, las dos páginas de
+# instalación, las dos portadas y las propias notas de la release mandaban a
+# descargar `dcc`. Nunca saltó porque el proyecto aún no tiene ninguna etiqueta:
+# habría reventado en la primera, con cinco 404 en la cara del primer usuario.
+Describe 'la URL de descarga apunta al fichero que se publica'
+	asset() {
+		awk '/^ *files:/ { sub(/^ *files: */, ""); n = split($0, p, "/"); print p[n]; exit }' \
+			"$REPO_ROOT/.github/workflows/release.yml"
+	}
+
+	It 'release.yml publica un asset con nombre'
+		When call asset
+		The output should not be blank
+	End
+
+	It 'y nadie manda a descargar otro nombre'
+		mismatched() {
+			local a f
+			a=$(asset)
+			for f in "$REPO_ROOT/README.md" "$REPO_ROOT"/docs/*.md "$REPO_ROOT"/docs/*/*.md \
+			         "$REPO_ROOT/.github/workflows/release.yml"; do
+				[ -f "$f" ] || continue
+				# La URL de release.yml lleva ${{ … }} en medio, con espacios: se
+				# neutraliza antes, o el último campo acaba siendo la llave.
+				sed 's/[$]{{[^}]*}}/TAG/g' "$f" \
+				| grep -oE 'releases/[A-Za-z/]*download/[^ )"]+' \
+				| sed -E 's|.*/||' \
+				| grep -vxF "$a" \
+				| sed "s|^|$(basename "$f"): |"
+			done
+			return 0
+		}
+		When call mismatched
+		The output should be blank
+	End
+End
+
+# CONTRIBUTING.md, CHANGELOG.md y SECURITY.md son páginas del sitio: los stubs
+# de docs/ no tienen contenido propio, los incrustan con pymdownx.snippets.
+# Viven en la RAÍZ, que no es docs/, así que hay que nombrarlos en los `paths`
+# del workflow o editarlos no reconstruye nada y el sitio publicado se queda con
+# la versión vieja. No falla de forma visible: simplemente no corre.
+#
+# Y la lista va DUPLICADA a propósito (los anchors de YAML no son fiables en
+# Actions), así que se vigilan las dos cosas: que estén, y que los dos bloques
+# no hayan divergido.
+Describe 'el workflow del sitio se dispara con todo lo que el sitio publica'
+	# Entradas del n-ésimo bloque `paths:`, sin comillas ni comentario al final.
+	# Sin extensiones GNU en awk: `[ \t]` explícito y nada de [[:space:]].
+	paths_of() {
+		awk -v want="$1" '
+			/^[ \t]*paths:[ \t]*$/ { n++; inp = 1; next }
+			inp && /^[ \t]*-[ \t]/ {
+				if (n == want) {
+					sub(/^[ \t]*-[ \t]*/, "")
+					sub(/[ \t]*#.*$/, "")
+					gsub(/"/, "")
+					sub(/[ \t]+$/, "")
+					print
+				}
+				next
+			}
+			{ inp = 0 }
+		' "$REPO_ROOT/.github/workflows/docs.yml"
+	}
+
+	# Lo que los stubs incrustan y además existe en la raíz del repositorio.
+	embedded_roots() {
+		local m
+		sed -nE 's/^--8<--[[:blank:]]+"([^"]+)".*/\1/p' "$REPO_ROOT"/docs/*.md \
+		| sort -u \
+		| while IFS= read -r m; do [ -f "$REPO_ROOT/$m" ] && printf '%s\n' "$m"; done
+		return 0
+	}
+
+	# Si el awk deja de casar, los dos tests de abajo compararían listas vacías
+	# contra listas vacías y pasarían en verde sin vigilar nada.
+	It 'docs.yml declara los dos bloques de paths'
+		both_blocks() { [ -n "$(paths_of 1)" ] && [ -n "$(paths_of 2)" ]; }
+		When call both_blocks
+		The status should be success
+	End
+
+	It 'y cada fichero de la raíz que el sitio incrusta está en la lista'
+		unwatched() {
+			local m
+			while IFS= read -r m; do
+				paths_of 1 | grep -qxF "$m" || printf '%s\n' "$m"
+			done < <(embedded_roots)
+			return 0
+		}
+		When call unwatched
+		The output should be blank
+	End
+
+	It 'y el bloque de push y el de pull_request dicen lo mismo'
+		diverged() { diff <(paths_of 1) <(paths_of 2); }
+		When call diverged
+		The output should be blank
+	End
+End
+
+# `dcc_load_language()` hace `MSG=()` y carga UN catálogo: no hay respaldo al
+# inglés. Una clave que falte en es.sh no sale traducida ni sin traducir — sale
+# el NOMBRE de la clave, `op_started`, en la cara del usuario. Verificado.
+Describe 'los catálogos tienen exactamente las mismas claves'
+	keys_of() { grep -oE '^[[:blank:]]*\[[a-z0-9_-]+\]' "$1" | tr -d ' \t[]' | sort; }
+
+	It 'ninguna clave de en.sh falta en es.sh'
+		missing_in_es() {
+			comm -23 <(keys_of "$REPO_ROOT/src/i18n/en.sh") <(keys_of "$REPO_ROOT/src/i18n/es.sh")
+		}
+		When call missing_in_es
+		The output should be blank
+	End
+
+	# Al revés también: una clave que solo existe en es.sh es peso muerto, y
+	# señal de que en.sh —el idioma fuente— se quedó atrás.
+	It 'ni sobra ninguna en es.sh que en.sh no tenga'
+		extra_in_es() {
+			comm -13 <(keys_of "$REPO_ROOT/src/i18n/en.sh") <(keys_of "$REPO_ROOT/src/i18n/es.sh")
+		}
+		When call extra_in_es
 		The output should be blank
 	End
 End
@@ -319,5 +556,24 @@ Describe 'dcc_version_info()'
 		When call info
 		The output should include "en"
 		The output should include "$DCC_CONFIG"
+	End
+End
+
+# DCC_CMD es el prefijo con el que la herramienta se cita a sí misma. Valía
+# `make` a secas, herencia de cuando el Makefile tenía targets de producto: hoy
+# no tiene ninguno, así que el panel mandaba a `make clean`, que no existe.
+Describe 'DCC_CMD se cita a sí mismo con algo que existe'
+	Include src/scripts/common.sh
+
+	It 'por defecto nombra un target REAL del Makefile'
+		target_exists() { grep -qE "^${DCC_CMD#make }:" "$REPO_ROOT/Makefile"; }
+		When call target_exists
+		The status should be success
+	End
+
+	It 'y el entorno lo puede cambiar: el bundle se llama de otra forma'
+		as_bundle() { DCC_CMD=dcc; printf '%s' "$DCC_CMD"; }
+		When call as_bundle
+		The output should equal "dcc"
 	End
 End

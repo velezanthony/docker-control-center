@@ -12,16 +12,31 @@ on:
   # La lista va duplicada a propósito: GitHub Actions no soporta anchors de
   # YAML de forma fiable, y un workflow que no parsea no avisa, simplemente no
   # corre.
+  #
+  # Los tres ficheros de la RAÍZ están aquí porque también son páginas: los
+  # stubs docs/{changelog,contributing,security}.md no tienen contenido propio,
+  # incrustan estos con pymdownx.snippets. GitHub los quiere arriba y el sitio
+  # los quiere publicados — una sola fuente, dos escaparates. Faltaban en esta
+  # lista, así que editar SECURITY.md se mergeaba sin reconstruir nada y el
+  # sitio seguía enseñando la versión vieja hasta que alguien tocaba docs/ por
+  # otro motivo. Un espejo que no refresca miente con más confianza que un
+  # documento que no existe. Si añades otro `--8<--` de la raíz, añádelo aquí.
   push:
     branches: [main]
     paths:
       - "docs/**"          # incluye docs/requirements.txt
       - "mkdocs.yml"
+      - "CONTRIBUTING.md"
+      - "CHANGELOG.md"
+      - "SECURITY.md"
       - ".github/workflows/docs.yml"
   pull_request:
     paths:
       - "docs/**"
       - "mkdocs.yml"
+      - "CONTRIBUTING.md"
+      - "CHANGELOG.md"
+      - "SECURITY.md"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 

@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# ops.sh — las operaciones sobre Docker; el Makefile solo despacha aquí.
-# Salidas: 0 hecho o ya estaba así · 1 no existe · 2 error de uso.
+# ops.sh — las operaciones sobre Docker. Quien despacha es bundle_main().
+# Salidas: 0 hecho o ya estaba así · 1 no existe o no se pudo · 2 error de uso ·
+# 3 cancelado por quien lo ejecuta.
 set -uo pipefail
 
 RC_NOT_FOUND=1
 RC_USAGE=2
-RC_CANCELLED=2   # pick() no pudo resolver el nombre: falta el dato
+RC_CANCELLED=3   # el humano ha dicho que no; no es un error de quien llama
 
 # shellcheck source=src/scripts/common.sh
-. "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+declare -F pad >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 BACKUP_DIR=${BACKUP_DIR:-$DCC_ROOT/backups}
 
@@ -23,11 +24,14 @@ HELPER_IMAGE=${HELPER_IMAGE:-alpine}
 stack_ids()         { docker ps -aq --filter label=com.docker.compose.project="$1"; }
 stack_ids_running() { docker ps -q  --filter label=com.docker.compose.project="$1"; }
 
-list_containers() { docker ps -a --format '{{.Names}}'; }
-list_running()    { docker ps --format '{{.Names}}'; }
+list_containers() { dcc_names_all; }
+list_running()    { dcc_names; }
 list_volumes()    { docker volume ls -q; }
 list_images()     { docker images --format '{{.Repository}}:{{.Tag}}'; }
 list_stacks()     { docker ps -a --format '{{.Label "com.docker.compose.project"}}' | awk 'NF' | sort -u; }
+
+# En una función para poder doblarla: `[ -t 0 ]` depende de cómo lances la suite.
+has_tty() { [ -t 0 ]; }
 
 # Si te dan un valor se usa; si no, menú. Sin TTY avisa en vez de colgarse.
 # `case` y no "list_$kind" compuesto, que ante un typo fallaba en silencio.
@@ -55,7 +59,7 @@ pick() {
 	fi
 
 	if [ -z "$opts" ]; then say "pick_none_$kind" >&2; return $RC_NOT_FOUND; fi
-	if [ ! -t 0 ]; then
+	if ! has_tty; then
 		printf "%s\n" "${YE}$(t pick_no_tty)${R}" >&2
 		# sed y no `sd`: sd no viene en ninguna distribución (hay un test).
 		printf "%s\n" "$opts" | sed 's/^/    /' >&2
@@ -85,7 +89,15 @@ warn_msg() { printf "${RD}%s${R}\n" "$(tf "$@")"; }
 # stack-start/stop/restart y NO up/down: en compose eso significa CREAR y
 # DESTRUIR. Un stack que no existe es error; uno ya en ese estado, éxito.
 stack_action() {
-	local action=$1 preset=${2:-} name ids
+	local action=$1 preset=${2:-} name ids key
+	# Valida la acción Y elige el mensaje. Con la validación hecha, el verbo de
+	# docker ES la acción: las tres se llaman igual en docker que aquí.
+	case "$action" in
+		start)   key=op_started   ;;
+		stop)    key=op_stopped   ;;
+		restart) key=op_restarted ;;
+		*) printf 'stack_action: acción desconocida "%s"\n' "$action" >&2; return $RC_USAGE ;;
+	esac
 	name=$(pick stack "$preset") || return $?
 	ids=$(stack_ids "$name")
 	if [ -z "$ids" ]; then say op_no_containers "$name"; return $RC_NOT_FOUND; fi
@@ -93,12 +105,11 @@ stack_action() {
 		ids=$(stack_ids_running "$name")
 		[ -z "$ids" ] && { say op_nothing_running "$name"; return 0; }
 	fi
+	# Rama else obligatoria: sin ella un docker que falla no imprime NADA, y
+	# `stack-start api && ./deploy.sh` despliega contra un stack sin arrancar.
 	# shellcheck disable=SC2086  # ids son varias palabras a propósito
-	case "$action" in
-		start)   docker start   $ids >/dev/null && ok_msg op_started   "$name" ;;
-		stop)    docker stop    $ids >/dev/null && ok_msg op_stopped   "$name" ;;
-		restart) docker restart $ids >/dev/null && ok_msg op_restarted "$name" ;;
-	esac
+	docker "$action" $ids >/dev/null || { warn_msg op_action_failed "$name"; return $RC_NOT_FOUND; }
+	ok_msg "$key" "$name"
 }
 
 op_stack_start()   { stack_action start   "${1:-}"; }
@@ -124,8 +135,10 @@ op_stack_rm() {
 	warn_msg warn_rm_stack "$n" "$name"
 	printf "${D}%s${R}\n" "$(t warn_rm_keep)"
 	confirm || return 0
+	# Igual que stack_action: un `rm -f` a medias no puede quedar en silencio.
 	# shellcheck disable=SC2086
-	docker rm -f $ids >/dev/null && ok_msg op_removed "$name"
+	docker rm -f $ids >/dev/null || { warn_msg op_action_failed "$name"; return $RC_NOT_FOUND; }
+	ok_msg op_removed "$name"
 }
 
 # --- Contenedores -------------------------------------------------------------
@@ -141,7 +154,6 @@ on_container() {
 need_jq() { command -v jq >/dev/null || { warn_msg need_jq; return $RC_USAGE; }; }
 
 inspect_json()  { need_jq || return $?; docker inspect "$1" | jq .; }
-exec_shell()    { docker exec -it "$1" sh -c 'command -v bash >/dev/null && exec bash || exec sh'; }
 
 op_logs()    { on_container container "${1:-}" docker logs --tail 200; }
 op_tail()    { on_container container "${1:-}" docker logs -f --tail 50; }
@@ -149,7 +161,7 @@ op_inspect() { on_container container "${1:-}" inspect_json; }
 op_start()   { on_container container "${1:-}" docker start; }
 op_restart() { on_container container "${1:-}" docker restart; }
 op_stop()    { on_container running   "${1:-}" docker stop; }
-op_sh()      { on_container running   "${1:-}" exec_shell; }
+op_sh()      { on_container running   "${1:-}" dcc_exec; }
 
 op_kill_all() {
 	local ids
@@ -173,11 +185,8 @@ op_volume_tree() {
 }
 
 # El tar sale por STDOUT y lo escribe tu shell: montando ./backups dentro, los
-# .tar.gz quedaban a nombre de root y no podías ni borrarlos.
-#
-# Se escribe a un temporal y se mueve solo si sale bien. La redirección crea el
-# fichero ANTES de que docker arranque, así que un fallo dejaba un .tar.gz de
-# cero bytes con nombre de backup esperando a engañar a alguien.
+# .tar.gz quedaban a nombre de root. Va a un temporal porque la redirección crea
+# el fichero antes de que docker arranque: un fallo dejaba un backup de 0 bytes.
 backup_one() {
 	local v=$1 out="$BACKUP_DIR/$1.tar.gz" tmp
 	tmp=$(mktemp "$BACKUP_DIR/.backup.XXXXXX" 2>/dev/null) || return 1
@@ -190,25 +199,25 @@ backup_one() {
 	return 1
 }
 
+# Se comprueba ANTES de invocar a docker: si no, un fallo soltaba tres mensajes.
+ensure_backup_dir() {
+	mkdir -p "$BACKUP_DIR" 2>/dev/null && [ -w "$BACKUP_DIR" ] && return 0
+	warn_msg backup_dir_unwritable "$BACKUP_DIR"; return $RC_USAGE
+}
+
 op_volume_backup() {
 	local v out; v=$(pick volume "${1:-}") || return $?
-	# El destino, antes de invocar a docker: si no, un fallo soltaba tres mensajes.
-	if ! mkdir -p "$BACKUP_DIR" 2>/dev/null || [ ! -w "$BACKUP_DIR" ]; then
-		warn_msg backup_dir_unwritable "$BACKUP_DIR"; return $RC_USAGE
-	fi
+	ensure_backup_dir || return $?
 	out="$BACKUP_DIR/$v.tar.gz"
 	backup_one "$v" 2>/dev/null || { warn_msg backup_failed_one "$v"; return $RC_NOT_FOUND; }
 	printf "${GR}✓${R} %s (%s)\n" "$out" "$(du -h "$out" | cut -f1)"
 }
 
-# Contaba los fallos y luego pintaba el ✓ igual: con docker caído decía
-# "✓ Backups en X" y devolvía 0 habiendo hecho CERO backups. Alguien ejecuta
-# esto antes de un stack-rm, ve el verde y borra el stack.
+# El ✓ solo si pasaron TODOS: alguien lanza esto antes de un stack-rm, ve el
+# verde y borra el stack.
 op_volume_backup_all() {
 	local v failed=0 total=0
-	if ! mkdir -p "$BACKUP_DIR" 2>/dev/null || [ ! -w "$BACKUP_DIR" ]; then
-		warn_msg backup_dir_unwritable "$BACKUP_DIR"; return $RC_USAGE
-	fi
+	ensure_backup_dir || return $?
 	while read -r v; do
 		[ -z "$v" ] && continue
 		total=$(( total + 1 ))
@@ -224,20 +233,18 @@ op_volume_backup_all() {
 	du -sh "$BACKUP_DIR"
 }
 
-# Se extrae PRIMERO a un directorio aparte y solo se borra lo viejo cuando el tar
-# ha terminado bien. Antes era `rm -rf /data/* && tar xzf`: un Ctrl-C, un flujo
-# cortado o un OOM entre las dos mitades dejaba el volumen vacío y sin restaurar
-# — justo en el comando que se ejecuta cuando algo ya ha salido mal.
-#
-# Cuesta el doble de espacio mientras dura. El `gzip -t` previo solo valida el
-# envoltorio, no que la extracción llegue al final.
+# Se extrae a un directorio aparte y lo viejo solo se borra cuando el tar ha
+# terminado: entre las dos mitades cabe un Ctrl-C o un OOM. Cuesta el doble de
+# espacio, y el `gzip -t` previo valida el envoltorio, no que la extracción acabe.
 op_volume_restore() {
 	local v src; v=$(pick volume "${1:-}") || return $?
 	src="$BACKUP_DIR/$v.tar.gz"
 	[ -f "$src" ] || { warn_msg restore_missing "$src"; return $RC_NOT_FOUND; }
 	if ! gzip -t "$src" 2>/dev/null; then warn_msg restore_corrupt "$src"; return $RC_NOT_FOUND; fi
 	docker volume create "$v" >/dev/null
-	docker run --rm -i -v "$v":/data "$HELPER_IMAGE" sh -c '
+	# El aviso dice DOS cosas porque el fallo puede caer después del borrado: que
+	# el backup sigue entero y que el volumen puede haber quedado a medias.
+	if ! docker run --rm -i -v "$v":/data "$HELPER_IMAGE" sh -c '
 		set -e
 		rm -rf /data/.dcc-restore
 		mkdir /data/.dcc-restore
@@ -245,15 +252,19 @@ op_volume_restore() {
 		find /data -mindepth 1 -maxdepth 1 ! -name .dcc-restore -exec rm -rf {} +
 		cp -a /data/.dcc-restore/. /data/
 		rm -rf /data/.dcc-restore
-	' <"$src" && ok_msg restore_done "$v"
+	' <"$src"; then
+		warn_msg restore_failed "$v"
+		return $RC_NOT_FOUND
+	fi
+	ok_msg restore_done "$v"
 }
 
 op_volumes_orphan() { docker volume ls -qf dangling=true; }
 
 # --- Limpieza -----------------------------------------------------------------
 
-# El ✓ se pintaba pasara lo que pasara: con docker caído los tres prune fallaban
-# y aun así salía "✓ Limpieza segura hecha".
+# rc=1 si falla cualquiera de los tres prune: con docker caído, un
+# "✓ Limpieza segura hecha" es una mentira que nadie va a comprobar.
 op_clean() {
 	local rc=0
 	docker container prune -f || rc=1
@@ -280,12 +291,10 @@ op_rm_image() { local i; i=$(pick image "${1:-}") || return $?; docker rmi "$i";
 
 # --- Panorama y motor ---------------------------------------------------------
 
-# Como op_* las deriva el despacho, y desaparecen de las listas a mano.
+# Lo publica commands.txt; aquí solo va la implementación (ver dispatch_names).
 op_ram() {
-	if ! declare -F engine_ram >/dev/null 2>&1; then
-		# shellcheck source=src/scripts/engine-ram.sh
-		. "$DCC_DIR/engine-ram.sh"
-	fi
+	# shellcheck source=src/scripts/engine-ram.sh
+	declare -F engine_ram >/dev/null 2>&1 || . "$DCC_DIR/engine-ram.sh"
 	engine_ram 1
 }
 
@@ -329,9 +338,8 @@ op_engine() {
 # --- Despacho -----------------------------------------------------------------
 
 # src/commands.txt manda sobre QUÉ existe; `op_<nombre>` solo aporta la
-# implementación. Al revés —derivando la lista de `declare -F op_*`— cualquier
-# helper interno llamado op_algo se publicaba como comando sin querer, y había
-# DOS fuentes de verdad que un test vigilaba en vez de que no pudieran divergir.
+# implementación. Derivar la lista de `declare -F op_*` publicaba cualquier
+# helper interno con ese prefijo, y dejaba dos fuentes de verdad que divergían.
 dispatch_names() {
 	local c
 	while read -r c; do
@@ -359,6 +367,6 @@ dispatch() {
 }
 
 # Define al cargarse; ejecuta solo si lo lanzas directo.
-if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+if [ -z "${DCC_BUNDLE:-}" ] && [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 	dispatch "$@"
 fi

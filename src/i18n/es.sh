@@ -1,8 +1,10 @@
 # ==============================================================================
 #  Catálogo de mensajes en español.
 #
-#  Mismas claves que i18n/en.sh. Si falta alguna, t() devuelve el nombre de la
-#  clave: se ve qué queda por traducir y nada revienta.
+#  Debe llevar EXACTAMENTE las mismas claves que i18n/en.sh: un test las compara
+#  en los dos sentidos y una que falte tumba make check. dcc_load_language()
+#  vacía MSG y carga UN catálogo, así que no hay respaldo al inglés: lo que
+#  saldría por pantalla es el NOMBRE de la clave.
 #
 #  Las claves que pasan por pad()/rpad() deben ser TEXTO PLANO: esos helpers
 #  alinean contando caracteres y los escapes ANSI contarían como visibles.
@@ -32,7 +34,7 @@ MSG+=(
 
 	# --- make help ------------------------------------------------------------
 	[help_title]="Docker Control Center"
-	[help_usage]="— ${DCC_CMD} <target> · solo desarrollo"
+	[help_usage]="— make <target> · solo desarrollo"
 	[help_hint]="Los comandos del producto: make bundle, y luego ./dist/… help"
 
 	[sec_setup]="Puesta a punto"
@@ -69,7 +71,7 @@ MSG+=(
 	[help_logs]="Últimas 200 líneas de log [nombre]"
 	[help_tail]="Log en vivo [nombre]"
 	[help_sh]="Shell dentro del contenedor [nombre]"
-	[help_dex]="Exec a prueba de dedos: ${DCC_CMD} dex <contenedor> [cmd] · con opciones usa CMD='…'"
+	[help_dex]="Exec a prueba de dedos: dex <contenedor> [comando]"
 	[help_inspect]="Inspeccionar contenedor en JSON [nombre]"
 	[help_start]="Arrancar contenedor [nombre]"
 	[help_stop]="Parar contenedor [nombre]"
@@ -78,9 +80,9 @@ MSG+=(
 
 	[help_volume-inspect]="Ver detalle de un volumen [volumen]"
 	[help_volume-tree]="Listar el contenido de un volumen [volumen]"
-	[help_volume-backup]="Backup de un volumen a ./backups [volumen]"
-	[help_volume-backup-all]="Backup de TODOS los volúmenes a ./backups"
-	[help_volume-restore]="Restaurar volumen desde ./backups [volumen]"
+	[help_volume-backup]="Backup de un volumen a backups/ [volumen]"
+	[help_volume-backup-all]="Backup de TODOS los volúmenes a backups/"
+	[help_volume-restore]="Restaurar volumen desde backups/ [volumen]"
 	[help_volumes-orphan]="Volúmenes que no usa ningún contenedor"
 
 	[help_clean]="Limpieza segura: contenedores parados, imágenes dangling, redes sueltas"
@@ -108,6 +110,7 @@ MSG+=(
 	[op_started]="✓ %s arrancado"
 	[op_stopped]="✓ %s parado"
 	[op_restarted]="✓ %s reiniciado"
+	[op_action_failed]="Docker ha fallado con '%s'. Mira lo que acaba de decir justo arriba."
 	[op_removed]="✓ %s eliminado"
 	[err_docker_down]="No se puede preguntar a docker: el demonio no responde."
 	[op_nothing_up]="Nada en ejecución."
@@ -188,7 +191,7 @@ MSG+=(
 
 	[st_created]="creado"
 	[st_restarting]="reiniciando"
-	[footer_full]="${DCC_CMD} help · make clean · make clean-build · make stats"
+	[footer_full]="${DCC_CMD} help · ${DCC_CMD} clean · ${DCC_CMD} clean-build · ${DCC_CMD} stats"
 	[footer_partial]="${DCC_CMD} dash para la vista completa"
 
 	# --- dex.sh ---------------------------------------------------------------
@@ -224,6 +227,7 @@ MSG+=(
 	[check_ok]="✓ todo parsea"
 	[pick_no_tty]="No hay terminal para mostrar un menú. Pasa el nombre, o elige uno de estos:"
 	[restore_corrupt]="%s está corrupto (gzip inválido). NO se ha borrado nada."
+	[restore_failed]="La restauración de %s ha FALLADO. El backup está intacto, pero el volumen puede haber quedado a medias: mira si tiene un directorio .dcc-restore dentro."
 	[backup_failed_one]="No se ha podido hacer backup de %s"
 	[pick_unknown_container]="No hay ningún contenedor llamado '%s'."
 	[pick_unknown_running]="No hay ningún contenedor en ejecución llamado '%s'."
@@ -233,19 +237,13 @@ MSG+=(
 	[need_jq]="Este comando necesita jq. Instálalo con: sudo apt install jq"
 	[backup_dir_unwritable]="No se puede escribir en %s"
 	[help_version]="Muestra la versión y qué encontró en este sistema"
-	[bundle_usage]="dcc <comando> [nombre]"
-	[bundle_more]="Todos los comandos:"
 	[help_bundle]="Genera dist/docker-control-center.sh: la herramienta en un fichero"
 	[not_installed]="no instalado"
+	[version_language]="idioma"
 	[help_usage_bundle]="— ${DCC_CMD} <comando> [nombre]"
 	[help_hint_bundle]="Sin argumento, cada comando abre un menú para elegir."
 	[help_coverage]="Cobertura de líneas de scripts/ con kcov"
-	[help_fmt]="Formatear todos los scripts con shfmt"
 	[help_hooks]="Instalar el hook de pre-commit de git"
 	[need_kcov]="kcov no está instalado. Instálalo con: brew install kcov"
-	[need_shfmt]="shfmt no está instalado. Instálalo con: brew install shfmt"
-	[fmt_ok]="✓ formateado"
 	[hooks_ok]="✓ hook instalado en %s"
-	[cov_title]="Cobertura de líneas"
-	[cov_none]="Sin datos de cobertura. ¿Está kcov instalado?"
 )

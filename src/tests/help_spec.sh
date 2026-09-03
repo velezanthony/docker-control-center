@@ -19,26 +19,6 @@ Describe 'section_key()'
 	End
 End
 
-Describe 'is_target_name()'
-	Include src/scripts/help.sh
-
-	Parameters
-		dash           success
-		stack-start    success
-		mi_target      success
-		ps2            success
-		'dos palabras' failure
-		''             failure
-		'scripts/x'    failure
-		'a.b'          failure
-	End
-
-	It "'$1' -> $2"
-		When call is_target_name "$1"
-		The status should be "$2"
-	End
-End
-
 Describe 'render_help()'
 	Include src/scripts/help.sh
 
@@ -81,6 +61,20 @@ EOF
 	It 'saca exactamente 3 targets, ni uno más'
 		When call count_targets
 		The output should equal "3"
+	End
+
+	# La regla de qué es un comando la pone dcc_parse_commands(), en common.sh.
+	# Aquí había una segunda que aceptaba mayúsculas y guiones bajos: la ayuda
+	# pintaba `Foo_bar` y dispatch lo rechazaba por desconocido. Comprobado.
+	It 'no pinta lo que dispatch luego rechazaría'
+		strange() {
+			printf '##@ Test\nFoo_bar: ## mayúscula\nmi_target: ## guión bajo\nnormal: ## este sí\n' >"$TMP/raros"
+			render_help <"$TMP/raros" | sed -E 's/\x1b\[[0-9;]*m//g'
+		}
+		When call strange
+		The output should include "normal"
+		The output should not include "Foo_bar"
+		The output should not include "mi_target"
 	End
 
 	It 'el catálogo gana al texto del ##, y sin clave cae al ##'

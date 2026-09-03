@@ -5,22 +5,28 @@
 set -uo pipefail
 
 # shellcheck source=src/scripts/common.sh
-. "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+declare -F pad >/dev/null 2>&1 || . "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-# Se CARGAN, no se lanzan: sus guardas BASH_SOURCE evitan dos forks por `dash`,
-# y en el bundle no habría scripts sueltos que lanzar.
-if ! declare -F engine_ram >/dev/null 2>&1; then
-	# shellcheck source=src/scripts/engine-ram.sh
-	. "$DCC_DIR/engine-ram.sh"
-fi
-if ! declare -F container_cpu >/dev/null 2>&1; then
-	# shellcheck source=src/scripts/container-cpu.sh
-	. "$DCC_DIR/container-cpu.sh"
-fi
+# Se CARGAN, no se lanzan: evita dos forks por `dash`. El `declare -F` va en la
+# misma línea porque en el fichero único ya es cierto y el source no se dispara.
+# shellcheck source=src/scripts/engine-ram.sh
+declare -F engine_ram    >/dev/null 2>&1 || . "$DCC_DIR/engine-ram.sh"
+# shellcheck source=src/scripts/container-cpu.sh
+declare -F container_cpu >/dev/null 2>&1 || . "$DCC_DIR/container-cpu.sh"
 
-W=$(tput cols 2>/dev/null || echo 100); (( W > 110 )) && W=110; (( W < 60 )) && W=60
+# Perezosa: en el fichero único se cargan todos los scripts en cada invocación,
+# y `dcc version` no pinta una regla en su vida.
+W=""
+ensure_width() {
+	[ -n "$W" ] && return 0
+	W=$(tput cols 2>/dev/null || echo 100)
+	(( W > 110 )) && W=110
+	(( W < 60 ))  && W=60
+	return 0   # o el estado lo fijaría el último (( )), falso entre 60 y 110
+}
+
 # Nada de `printf %${W}s | tr ' ' '─'`: tr opera sobre BYTES y ─ ocupa 3 en UTF-8.
-rule() { printf "%s" "$D"; for ((i = 0; i < W; i++)); do printf '─'; done; printf "%s\n" "$R"; }
+rule() { ensure_width; printf "%s" "$D"; for ((i = 0; i < W; i++)); do printf '─'; done; printf "%s\n" "$R"; }
 
 section() {
 	printf "\n${B}%s${R}" "$1"
@@ -31,8 +37,8 @@ section() {
 # --- Qué secciones se piden ---------------------------------------------------
 ALL_SECTIONS="summary,alerts,stacks,volumes,images,disk"
 
-# Fuente ÚNICA para el Makefile y el bundle. Devuelve != 0 si no es una vista,
-# para que quien pregunta siga probando sin listas paralelas.
+# Fuente ÚNICA de qué pinta cada vista. Devuelve != 0 si no es una vista, para
+# que quien pregunta siga probando sin listas paralelas.
 dcc_view_sections() {
 	case "$1" in
 		dash)       printf '%s' "$ALL_SECTIONS" ;;
@@ -52,13 +58,19 @@ parse_args() {
 	ONLY="all"
 	while [ $# -gt 0 ]; do
 		case "$1" in
-			--only) ONLY="$2"; shift 2 ;;
+			# Sin comprobar $#, un `--only` suelto moría con "unbound variable"
+			# de `set -u`: un mensaje del intérprete, no de la herramienta.
+			--only)
+				[ $# -ge 2 ] || { printf 'dashboard: --only necesita un valor\n' >&2; return 2; }
+				ONLY="$2"; shift 2 ;;
 			--only=*) ONLY="${1#--only=}"; shift ;;
-			*) shift ;;
+			# --only es interfaz INTERNA: lo que no se reconoce es un bug de quien
+			# llama, no la entrada de un usuario. Ignorarlo daba el panel entero.
+			*) printf 'dashboard: argumento desconocido: %s\n' "$1" >&2; return 2 ;;
 		esac
 	done
-	ONLY=${ONLY//volumenes/volumes}; ONLY=${ONLY//imagenes/images}; ONLY=${ONLY//ps/stacks}
-	ONLY=${ONLY//resumen/summary}; ONLY=${ONLY//alertas/alerts}; ONLY=${ONLY//disco/disk}
+	# `--only` es INTERNO: lo invoca bundle_main con lo que da dcc_view_sections,
+	# que ya son nombres canónicos. Si se hace público, sus alias van al catálogo.
 	[ "$ONLY" = "all" ] && ONLY="$ALL_SECTIONS"
 
 	# df.json (la llamada cara) solo se pide si alguna sección lo necesita.
@@ -203,7 +215,12 @@ fmt_ports() {
 		END { print o }'
 }
 
-exit_code() { awk '{ if (match($0, /Exited \([0-9]+\)/)) print substr($0, RSTART+8, RLENGTH-9) }' <<<"$1"; }
+# "Exited (137) 2 days ago" -> "137". El 8 mide "Exited (" y el 9 eso más el
+# paréntesis: en UN sitio, porque lo usan dos awk distintos. Mismo truco que
+# JQ_BYTES: el programa se compone anteponiendo la función.
+AWK_EXIT_CODE='function xcode(s) { return match(s, /Exited \([0-9]+\)/) ? substr(s, RSTART + 8, RLENGTH - 9) : "" }'
+
+exit_code() { awk "$AWK_EXIT_CODE"'{ c = xcode($0); if (c != "") print c }' <<<"$1"; }
 
 # --- Secciones ----------------------------------------------------------------
 render_header() {
@@ -237,10 +254,10 @@ render_alerts() {
 	# murió mal. Se usa $1 (nombre del contenedor) y no $7 (servicio): "app" y
 	# "dev" se repiten entre stacks y no identifican nada.
 	local errc killc old
-	errc=$(awk -F'\t' '{ if (match($3, /Exited \([0-9]+\)/)) {
-			c = substr($3, RSTART + 8, RLENGTH - 9)
-			if (c != "0" && c != "137") print $1 " (" c ")"
-		} }' <<<"$PSDATA" | join_list)
+	errc=$(awk -F'\t' "$AWK_EXIT_CODE"'{
+			c = xcode($3)
+			if (c != "" && c != "0" && c != "137") print $1 " (" c ")"
+		}' <<<"$PSDATA" | join_list)
 	killc=$(awk -F'\t' '$3 ~ /Exited \(137\)/' <<<"$PSDATA" | wc -l)
 	old=$(awk -F'\t' '$3 ~ /Exited/ && $3 ~ /(weeks?|months?)/ {print ($6 != "" ? $6 : $1)}' <<<"$PSDATA" | sort -u | join_list)
 
@@ -333,12 +350,8 @@ render_stacks() {
 		IFS="$SEP" read -r icon cnt < <(stack_badge "$up" "$total")
 		printf "\n %b ${B}%s${R}  %b\n" "$icon" "$(pad "$label" "$W_STACK")" "$cnt"
 
-		# Los tabuladores se pasan a 0x1f ANTES de leer: bash colapsa las
-		# secuencias de IFS que son espacio en blanco, y el tabulador lo es. Un
-		# contenedor sin puertos publicados deja ese campo vacío, los dos tabs
-		# seguidos cuentan como UNO y todo lo de detrás se corre un puesto — se
-		# perdía el nombre del servicio y en la columna de imagen salía el
-		# proyecto. (awk -F'\t' sí respeta los vacíos; por eso el resto no cambia.)
+		# A 0x1f antes de leer: con IFS de tabulador bash colapsa dos seguidos, y
+		# un contenedor sin puertos corre toda la fila (ver SEP en common.sh).
 		local name state status ports image _proj svc
 		while IFS="$SEP" read -r name state status ports image _proj svc; do
 			[ -z "$name" ] && continue
@@ -354,20 +367,24 @@ render_volumes() {
 		printf "   ${D}%s${R}\n" "$(t vol_none)"; return
 	fi
 	printf "   ${D}%s %10s  %s${R}\n" "$(pad "$(t col_name)" "$W_VOLUME")" "$(t col_size)" "$(t col_usedby)"
+
+	# nombre<TAB>tamaño<TAB>refs. Con df.json salen los tres; sin él no hay
+	# tamaño ni recuento, y quién lo usa se saca igual de VOLMAP. Una sola fila
+	# impresa: con dos printf, los formatos se van el uno del otro.
+	volume_rows() {
+		if [ -n "${M[disk]:-}" ]; then
+			jq -r "$JQ_BYTES"' .Volumes[] | [.Name, (.UsageData.Size | h), (.UsageData.RefCount|tostring)] | @tsv' "$TMP/df.json"
+		else
+			docker volume ls -q | while IFS= read -r v; do printf '%s\t—\t\n' "$v"; done
+		fi | sort
+	}
+
 	local v hs refs users
-	if [ -n "${M[disk]:-}" ]; then
-		jq -r "$JQ_BYTES"' .Volumes[] | [.Name, (.UsageData.Size | h), (.UsageData.RefCount|tostring)] | @tsv' "$TMP/df.json" \
-		| sort | while IFS=$'\t' read -r v hs refs; do
-			users=$(users_of_volume "$v")
-			[ "$refs" = "0" ] && users="${YE}$(t vol_orphan)${R}"
-			printf "   %s %10s  %b\n" "$(pad "$v" "$W_VOLUME")" "$hs" "${users:-${YE}$(t vol_orphan)${R}}"
-		done
-	else
-		docker volume ls -q | sort | while read -r v; do
-			users=$(users_of_volume "$v")
-			printf "   %s %10s  %b\n" "$(pad "$v" "$W_VOLUME")" "—" "${users:-${YE}$(t vol_orphan)${R}}"
-		done
-	fi
+	while IFS=$'\t' read -r v hs refs; do
+		users=$(users_of_volume "$v")
+		[ "$refs" = "0" ] && users="${YE}$(t vol_orphan)${R}"
+		printf "   %s %10s  %b\n" "$(pad "$v" "$W_VOLUME")" "$hs" "${users:-${YE}$(t vol_orphan)${R}}"
+	done < <(volume_rows)
 }
 
 render_images() {
@@ -415,7 +432,7 @@ render_all() {
 }
 
 dashboard_main() {
-	parse_args "$@"
+	parse_args "$@" || return $?
 	collect_data
 	render_all
 }
@@ -423,6 +440,6 @@ dashboard_main() {
 # Define al cargarse y solo ejecuta si lo lanzas directo: es lo que permite a los
 # tests hacer source y probar fmt_status(), pad() o los render_* sin arrancar
 # docker. Sin la guarda, un simple source tardaba 1,6 s.
-if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+if [ -z "${DCC_BUNDLE:-}" ] && [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 	dashboard_main "$@"
 fi

@@ -4,6 +4,10 @@ Design guide for tools written in pure Bash (>= 4.4) with ShellSpec as the test
 framework. Every snippet on this page was **verified by running it** — not
 written from memory. Minimum Bash versions are noted where they matter.
 
+This page is about how the code is built. What the finished tool does **not**
+do — the silent failures, the destructive commands, the dependencies it never
+declares — is catalogued in [Limitations](../users/limitations.md).
+
 !!! warning "This repository promises Bash 4.0, not 4.4"
     The guide assumes 4.4+. This project declares **4+** in its README, so
     `${var@Q}` (4.4), `local -n` (4.3) and `BASH_ARGV0` (5.0) cannot be used in
@@ -30,6 +34,23 @@ IFS=$'\n\t'
 | `-o pipefail` | a pipeline fails if any stage fails | without it, `failing_cmd \| tee log` returns 0 |
 | **`-E`** | **the ERR trap is inherited by functions and subshells** | **without this your error handler never fires where it matters** |
 | `IFS=$'\n\t'` | drops space from the separator | avoids accidental word splitting on paths with spaces |
+
+!!! warning "This repository does not run that boilerplate, and it is deliberate"
+    Every executable script here runs `set -uo pipefail` and nothing else —
+    eight of the nine files in `src/scripts/`, plus `build.sh` and `deps.sh`.
+    `common.sh` sets nothing at all: it is the library the others source.
+    `set -e` is **banned** by [How to contribute](../contributing.md), because
+    `pick()`, `confirm()` and `grep` return != 0 as a legitimate answer, and
+    aborting on the first non-zero would abort on a user declining a menu.
+    There is no `IFS=$'\n\t'` anywhere
+    either, and no `trap ERR`: the product has two traps in total, an `EXIT`
+    cleanup in `dashboard.sh` and a `RETURN` cleanup in `deps.sh`.
+
+    The price is paid, not dodged. With no `-e`, `build.sh` reports a missing
+    input on stderr, **exits `0`**, and writes the single file anyway: remove
+    `src/commands.txt` and the bundle still builds, carrying `DCC_HELP_SRC=''`
+    and therefore no help at all. Verified. Read §1 as the general rule and this
+    box as the standing exception.
 
 `-E` (`errtrace`) is the one almost everyone omits. **Verified:**
 
@@ -336,10 +357,39 @@ if [[ ${BASH_SOURCE[0]} == "${0}" ]]; then
 fi
 ```
 
-A file that separates defining from executing can be loaded from anywhere. That
-same property is what lets you **bundle** every module into a single `.sh` by
-concatenation: pasted together they only define, and a dispatcher is appended at
-the end.
+A file that separates defining from executing can be loaded from anywhere.
+
+!!! danger "That guard does not survive concatenation"
+    It is the guard everyone writes, and on its own it is **not enough to bundle
+    with**. Paste two modules that carry it into one file and `BASH_SOURCE[0]`
+    and `$0` are both that file, so every `main` fires in turn, in source order.
+    Verified — two such modules plus a dispatcher, concatenated and run:
+
+    ```console
+    $ bash bundle.sh
+    A RAN
+    B RAN
+    DISPATCHER
+    ```
+
+Bundling needs a second condition: an off switch the wrapper sets. Which is why
+every script in `src/scripts/` ends with this, and not with the two-line form
+above:
+
+```bash
+# Sourced: only DEFINES. Executed: RUNS.
+# Inside the single file DCC_BUNDLE is set, so the guard switches itself off.
+if [ -z "${DCC_BUNDLE:-}" ] && [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+	main "$@"
+fi
+```
+
+`build.sh` writes `DCC_BUNDLE=1` into the header of the generated file. The
+modules pasted below it only define, and the dispatcher appended at the end is
+the only thing that runs. Two files sit outside the rule on purpose:
+`bundle-main.sh`, whose guard is the inverse (`[ -n "${DCC_BUNDLE:-}" ]`, so it
+runs **only** inside the bundle), and `common.sh`, a library with no entry point
+and no guard at all.
 
 ---
 
@@ -351,8 +401,36 @@ the end.
 |---|---|---|
 | Subshell | **no** | **yes** |
 | Variables after the call | **visible** | **lost** |
-| kcov coverage | **measured** | no |
+| kcov coverage | **measured** | **also measured** |
 | Use for | internal functions | whole scripts, CLIs |
+
+`When run` on a project function **is** measured — verified: a single
+`When run dex_main` covered 31 lines of `dex.sh`. What kcov cannot see is a
+separate **process** (`When run bash -c …`, or the bundle that `bundle_spec.sh`
+launches), because it instruments this suite and not its children.
+
+**Two more blind spots, and they pull in opposite directions.**
+
+A **one-line function never enters the report at all.** `f() { g; return; }`
+puts the body on the definition line, and kcov instruments neither: the function
+comes out neither covered nor uncovered — it leaves the denominator. In `ops.sh`
+that is every `op_ctx()   { docker context ls; }` in the file, so the script is
+scored over noticeably fewer lines than it actually has. Write the same function
+across three lines and it does appear: `op_engine()` sits in the report with
+`hits=0`. The compact style this guide defends below buys readability and pays
+for it in coverage you cannot see.
+
+The inverse artefact: **an `awk` or `jq` program inside a shell string is counted
+as bash.** Those lines never run as bash, so they are reported uncovered however
+well the function is tested. `dcc_parse_commands()` has its own `Describe` in
+`common_spec.sh`; the line holding the `awk` invocation shows plenty of hits and
+the lines of awk program below it all read `hits=0`. Same in `dashboard.sh`,
+where `fmt_status()` is entered constantly and every line of `awk` inside it
+reports zero — a good part of why that file's percentage looks low, and why
+splitting it in two would not move it by a single line.
+
+Run `make coverage` and open `coverage/index.html` to see both artefacts for
+yourself. Do not take the percentage at face value in either direction.
 
 **Verified:**
 
@@ -543,24 +621,30 @@ Options worth knowing, by context:
 
 ### Split the slow tests out
 
-Measured on this repository, 237 examples, machine idle:
+**One file, `bundle_spec.sh`, costs close to half the wall clock**, every time
+anyone has measured it. It builds the single file and runs it as a separate
+process, several times over. That ratio is the finding worth writing down.
 
-```
-bundle_spec.sh     20.0 s     <- builds and runs the bundle N times
-dashboard_spec.sh   1.9 s
-ops_spec.sh         1.0 s
-common_spec.sh      0.9 s
-whole suite        ~25 s
-```
+**The seconds are not, so this guide does not publish them.** Time it yourself
+when you need it:
 
-**One file is 80 % of the time.** Which is why parallelism barely helps:
-
-```
-serial:     ~25.0 s
---jobs 8:    22.4 s      <- 11 % better, not 8x
+```bash
+time make test        # everything
+time make test-fast   # everything except bundle_spec.sh
 ```
 
-ShellSpec parallelises **per file**. With one dominant file, Amdahl wins.
+And do not write the answer down. Measuring this suite without changing a line
+of it has produced times varying by almost **3×** on one machine in a single
+afternoon. A previous version of this section published a range that looked
+prudent; the very next run fell outside it.
+
+`/proc/loadavg` does not save you either — it is a one-minute average, so it
+lags a machine that has just gone quiet. The fastest run ever recorded here
+reported the *highest* load.
+
+Parallelism does not save you either: `--jobs` barely moved the clock, because
+ShellSpec parallelises **per file** and one file dominates. Amdahl wins. Split
+the file or accept the wall clock.
 
 Tags are **extra arguments on the block**, not a directive:
 
@@ -584,18 +668,31 @@ test-fast: $(SHELLSPEC)
 ```
 
 ```bash
-make test-fast         # ~5 s: the development loop
-make test              # ~25 s: pre-commit and CI
-shellspec --tag slow   # only the slow ones, when you need them
+make test-fast                            # the development loop
+make test                                 # pre-commit and CI
+./vendor/shellspec/shellspec --tag slow   # the tagged block, on demand
 ```
 
-!!! tip "Measure on an idle machine"
-    The first version of this table said 96 s and 120 s. It was taken with
-    another stopwatch running in parallel over the same suite: the figures came
-    out **5× inflated**. The conclusion (one file dominates, `--jobs` will not
-    fix it) held; the numbers did not. Re-measure before quoting.
+That third line carries its path for a reason: ShellSpec is **vendored, not
+installed**. `make deps` puts it in `vendor/shellspec/shellspec` and there is no
+`shellspec` on your `PATH` — the same holds for every bare `shellspec` in the
+option table above. And the tag is **not** the exact complement of `test-fast`:
+`bundle_spec.sh` opens a second `Describe` that carries no tag, so `--tag slow`
+runs fewer examples than `test-fast` skips, and those extra ones belong to
+neither loop.
 
-### `shfmt` DESTROYS spec files
+!!! tip "Every timing this guide ever published turned out to be wrong"
+    The first version quoted two figures taken with another stopwatch running in
+    parallel over the same suite — inflated several times over. The second was
+    measured on a supposedly quiet machine and doubled the moment an editor was
+    open. The third was a deliberately cautious *range*, and the next run
+    escaped it.
+
+    The conclusion held every single time: one file dominates and `--jobs` will
+    not fix it. The numbers never did. That is why they are gone, and why the
+    only instruction here is `time make test` at the moment you care.
+
+### `shfmt` destroys more than you think
 
 **Verified.** `shfmt` does not understand `Describe`/`It`/`End` as block
 structure: it treats them as loose commands and flattens the whole DSL to column 0.
@@ -609,12 +706,31 @@ structure: it treats them as loose commands and flattens the whole DSL to column
 ```
 
 It does not break execution (indentation is cosmetic in shell) but it destroys
-the readability of the nesting, which is the whole point of the DSL. **Exclude
-`*_spec.sh` from `shfmt`.**
+the readability of the nesting, which is the whole point of the DSL.
+
+**And it is not only the specs.** This project excluded `*_spec.sh` and kept a
+`make fmt` for the scripts — until someone measured it: `shfmt -d` produced
+**1333 lines of diff across all nine scripts** on a tree nobody had touched
+(**1437** today, with shfmt 3.13.1 and its defaults — the figure depends on the
+version and the flags, so quote both). It cannot leave a one-line function
+alone:
+
+```diff
+-f() { g; return; }
++f() {
++	g
++	return
++}
+```
+
+That compact form is deliberate — it is what lets seven one-line operations read
+at a glance. So the target was deleted. **A formatter you have to warn people
+not to run is not a formatter.** `shellcheck` is the style authority here; it
+has an opinion about correctness and none about where your braces go.
 
 ### Mandatory `shellcheck` header in specs
 
-The DSL triggers six **inherent** false positives:
+The DSL triggers seven **inherent** false positives:
 
 ```bash
 # shellcheck shell=bash
@@ -625,12 +741,18 @@ The DSL triggers six **inherent** false positives:
 #   SC2215  a cell such as -9000000 looks like a command flag
 #
 #  The DSL calls and shares state in ways shellcheck cannot follow:
-#   SC2329  functions inside an `It` are called indirectly by `When call`
+#   SC2317  a function body inside an `It` looks unreachable
+#   SC2329  the same check under its new name, from 0.10.0 on
 #   SC2034  what `setup()` writes is read in another block
 #   SC2154  `MAP[key]` is a literal KEY, not a variable to resolve
 #
-# shellcheck disable=SC2034,SC2154,SC2215,SC2286,SC2288,SC2329
+# shellcheck disable=SC2034,SC2154,SC2215,SC2286,SC2288,SC2317,SC2329
 ```
+
+`SC2317` and `SC2329` are **the same check renamed**, so both go in: 0.9.0 is
+what Ubuntu ships to CI and only knows the old name, while a local 0.11.0 only
+knows the new one. Drop either and the suite lints clean on one machine and red
+on the other.
 
 Disable them **in the spec header**, never in a global `.shellcheckrc` — that
 would also silence them in production code, which is where they matter.
@@ -655,6 +777,22 @@ not match. `vendor/` is generated output and belongs in `.gitignore`, like
 `dist/`. Package managers (`bpkg`, `basher`) do not help here: you have to
 install them globally first, which is a dependency to manage dependencies.
 
+`make deps` vendors exactly one thing: ShellSpec. Three more tools have to be on
+your machine already, and none of them is declared in `dependencies.txt`:
+
+| Tool | Needed by | Missing |
+|---|---|---|
+| `shellcheck` | `make lint`, so also `make check` and the hook | Checked first; you get the project's own message |
+| `kcov` | `make coverage` | Checked first; the project's own message |
+| `jq` | `make lint`, so also `make check` and the hook | **No guard.** Raw `jq: command not found`, then `make: *** [lint] Error 1` |
+
+Because `make lint` is not only shellcheck. Before it lints anything it
+validates `bytes.jq` and `metrics.jq` with `jq -n` — `metrics.jq` with
+`bytes.jq` prepended, because on its own it fails with *"h/0 is not defined"*.
+That loop calls `jq` directly, so on a machine with the vendored ShellSpec but no `jq`, `make check`
+dies at its first target with an error from the interpreter and not a word of
+the project's own. Verified.
+
 Git submodules were tried and rejected: they nest a second Git repository inside
 yours — duplicated panels in the editor, a `clone --recursive` everyone forgets,
 and accidental commits into someone else's code.
@@ -662,63 +800,76 @@ and accidental commits into someone else's code.
 ### CI pipeline
 
 ```yaml
-# .github/workflows/ci.yml
+# .github/workflows/ci.yml — trimmed here; the reasoning lives in the real file
 name: CI
 on:
-  push: { branches: [main] }
+  push: { branches: [main, development] }
   pull_request:
 
+# Without this, three pushes in a row leave three full runs going and nobody
+# cancels the old ones. Except on main, where every commit wants its own result.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
-  quality:
+  check:                                 # bash 5, mawk
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - run: sudo apt-get update && sudo apt-get install -y shellcheck jq
+      - run: make check                  # lint and tests behind one target
 
-      - name: ShellCheck
-        run: shellcheck -x -S style src/scripts/*.sh src/tests/*_spec.sh
+      # The bundle is checked separately: a broken single file is not caught by
+      # anyone until a user downloads it.
+      - run: make bundle
+      - name: The single file starts outside the repository
+        run: cp dist/docker-control-center.sh /tmp/dcc && cd /tmp && ./dcc version
 
-      # -d = diff: fails if anything is unformatted, rewrites nothing.
-      # Specs are excluded: shfmt does not understand the DSL.
-      - name: shfmt (check, do not rewrite)
-        run: |
-          curl -fsSL -o /tmp/shfmt \
-            https://github.com/mvdan/sh/releases/download/v3.10.0/shfmt_v3.10.0_linux_amd64
-          chmod +x /tmp/shfmt
-          /tmp/shfmt -d -ln bash -i 0 -ci src/scripts/*.sh build.sh deps.sh
-
-      # Dependencies come from the manifest, with their sha256 verified.
-      - name: Dependencies
-        run: make deps
-
-      - name: Tests
-        run: make test
-
-  coverage:
+  # The README promises bash 4+. Running only on the runner — bash 5.2 — checks
+  # the letter of the rule without ever running the promised configuration.
+  #
+  # ubuntu:18.04 and NOT the `bash:4.4` image: that one is Alpine and ships
+  # busybox awk, so it would mix two different incompatibilities into one red
+  # cross. 18.04 gives bash 4.4 with mawk, which is exactly what the README says.
+  #
+  # And `docker run` rather than `container:`, because actions/checkout needs
+  # node inside the container and these images do not have it.
+  bash4:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y kcov
-      - run: make deps && make coverage
-      - uses: actions/upload-artifact@v4
-        with: { name: coverage, path: coverage/ }
+      - uses: actions/checkout@v7
+      - run: |
+          docker run --rm -v "$PWD:/repo" -w /repo ubuntu:18.04 sh -c '
+            apt-get update -qq && apt-get install -y -qq make curl ca-certificates
+            # `bash -n` is the part of `make check` that DOES depend on the
+            # version: this is where bash 5 syntax gets caught.
+            for f in src/scripts/*.sh src/tests/*.sh build.sh deps.sh; do
+              bash -n "$f" || exit 1
+            done
+            make test
+          '
 
-  # The README promises Bash 4+. An untested promise is not a promise.
-  compatibility:
+  # The code claims to avoid GNU extensions so it behaves the same with mawk and
+  # gawk. The runners ship mawk, so gawk was never exercised.
+  gawk:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        bash: ["4.4", "5.0", "5.2"]
-    container: bash:${{ matrix.bash }}
     steps:
-      - uses: actions/checkout@v4
-      - run: apk add --no-cache make git curl tar coreutils
-      - run: make deps && make test
+      - uses: actions/checkout@v7
+      - run: |
+          sudo apt-get update && sudo apt-get install -y gawk
+          sudo update-alternatives --set awk /usr/bin/gawk
+      - run: make test
 ```
 
-The version matrix is not optional for a tool that advertises a minimum Bash. In
-this project `EPOCHREALTIME` (Bash 5.0) slipped into the code and aborted a whole
-script on Bash 4, under `set -u`, without saying why. A matrix would have caught
-it on the first push.
+Three jobs, three promises the README makes. There is deliberately **no coverage
+job**: kcov runs locally with `make coverage`, and a number that nobody is
+allowed to lower is a number that ends up gamed.
+
+Testing the minimum bash is not optional in a tool that advertises one. In this
+project `EPOCHREALTIME` (bash 5.0) slipped into the code and aborted a whole
+script on bash 4, under `set -u`, without saying why. The `bash4` job would have
+caught it on the first push.
 
 ### Pre-commit hook
 
@@ -754,8 +905,10 @@ make deps                  # fetch vendor/, verifying sha256
 make test                  # whole suite
 make test T=common         # a single file
 make test-fast             # everything but the slow bundle spec
-make lint                  # shellcheck
-make fmt                   # shfmt (specs excluded)
+make lint                  # validates the .jq files, then shellcheck; no formatter
 make coverage              # kcov -> coverage/
 make check                 # lint + parse + tests: run before committing
 ```
+
+`deps` needs the network; `lint` and `check` need `shellcheck` **and** `jq`;
+`coverage` needs `kcov`. Only ShellSpec is vendored for you.

@@ -1,6 +1,6 @@
 # Docker Control Center
 
-A Docker dashboard for the terminal. Bash and `make`, no daemons, nothing
+A Docker dashboard for the terminal. One bash file, no daemons, nothing
 resident.
 
 It shows you at a glance which containers you have, grouped by project, how much
@@ -9,7 +9,7 @@ you can delete. And it lets you operate: start, stop, tail logs, get a shell,
 back volumes up, clean.
 
 ```bash
-make dash
+dcc dash
 ```
 
 ## Why not `lazydocker`?
@@ -19,18 +19,21 @@ Because they solve different problems.
 | | |
 |---|---|
 | **`lazydocker`, `ctop`, `dry`** | Interactive interfaces. You open them, look, navigate, quit. Go binaries you have to install. |
-| **This** | Commands that print and exit. Nothing to install: bash and `make`, which you already have. |
+| **This** | Commands that print and exit. One bash file: `docker`, `bash` 4+ and `awk`, which you already have. |
 
 Three differences that matter depending on what you need:
 
-- **It fits in a script.** `make status` prints and exits, so it works inside a
-  `watch`, a cron job or a pipe. A TUI does not.
-- **Nothing to install on a server.** A `git clone` or a 100 KB file. No
-  binaries, no package manager, no root.
+- **It fits in a script.** `dcc status` prints and exits, so it works inside a
+  `watch`, a cron job or a pipe. A TUI does not. Call the file, not `make run`,
+  which always exits `0` — see [Exit codes](users/commands.md#exit-codes). The
+  colour escapes travel down the pipe with the output: there is no `NO_COLOR`
+  and no pipe detection.
+- **Nothing to install on a server.** A `git clone` or a single file under
+  90 KB. No binaries, no package manager, no root.
 - **The numbers are verifiable.** Docker's `Reclaimable` field does not add up
   with the containerd snapshotter: `SharedSize` comes back as 0 for images that
-  *do* share base layers. Nothing here is estimated — everything is counted from
-  the raw API fields, and the code documents where each figure comes from.
+  *do* share base layers. The disk figures are not estimated — they are counted
+  from the raw API fields, and the code documents where each one comes from.
 
 If what you want is to browse containers with the keyboard, use `lazydocker`:
 it is better at that and we are not competing.
@@ -54,18 +57,35 @@ interface.
 - **Tells you what takes up disk.** Sizes counted from the API, not estimated.
   It tells you how much you would reclaim and with which command.
 - **Operates without memorising names.** Commands open a menu to pick the
-  container, volume or stack. Get a name wrong and it suggests the closest one.
-- **Backs volumes up.** One command to save them, another to restore them.
+  container, volume or stack. Get a name wrong in `dex` and it suggests the
+  closest one.
+- **Backs volumes up.** One command to save them, another to restore them. They
+  are taken hot, each one overwrites the previous, and `volume-restore` needs
+  the volume to still exist — read
+  [Limitations](users/limitations.md#backups-read-this-before-you-trust-them)
+  before you rely on them.
 - **Speaks your language.** English and Spanish, detected from your
   environment. Nothing to configure.
 
 ## Getting started
 
+!!! warning "Nothing has been released yet"
+    The repository carries no tags, so `releases/latest` has nothing to serve.
+    Until the first one, clone the repository and run `make link`.
+
 ```bash
-curl -LO https://github.com/velezanthony/docker-control-center/releases/latest/download/dcc
-chmod +x dcc && mv dcc ~/.local/bin/
+git clone https://github.com/velezanthony/docker-control-center
+cd docker-control-center && make link
 dcc dash
 ```
 
-One file, ~100 KB. See [Installation](users/installation.md) for the other way
-(cloning the repository) and the requirements.
+From the first release on it is one file, under 90 KB:
+
+```bash
+curl -LO https://github.com/velezanthony/docker-control-center/releases/latest/download/dcc
+chmod +x dcc && mv dcc ~/.local/bin/
+```
+
+See [Installation](users/installation.md) for the requirements, and
+[Limitations](users/limitations.md) for what it does not do, does badly, or does
+quietly.

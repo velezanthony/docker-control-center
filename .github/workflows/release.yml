@@ -47,13 +47,20 @@ jobs:
       - name: Generar el fichero único
         run: make bundle
 
+      # El asset toma el BASENAME del fichero que se sube, así que se renombra
+      # AQUÍ. Se publicaba como docker-control-center.sh mientras el README, las
+      # dos páginas de instalación, las dos portadas y las notas de abajo
+      # mandaban a descargar `dcc`: cinco 404 en la primera release.
+      - name: Renombrarlo a dcc, que es como se instala
+        run: cp dist/docker-control-center.sh dcc && chmod +x dcc
+
       - name: Comprobarlo fuera del repositorio
-        run: cp dist/docker-control-center.sh /tmp/dcc && cd /tmp && ./dcc version
+        run: cp dcc /tmp/dcc && cd /tmp && ./dcc version
 
       - name: Publicar
         uses: softprops/action-gh-release@v3
         with:
-          files: dist/docker-control-center.sh
+          files: dcc
           generate_release_notes: true
           body: |
             ## Instalación

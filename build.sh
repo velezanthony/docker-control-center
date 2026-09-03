@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# build.sh — genera dist/: la herramienta entera en UN fichero. Es una
-# concatenación: la guarda BASH_SOURCE hace que pegados solo DEFINAN, y al final
-# se añade un despachador. Catálogos, .jq y ayuda van incrustados.
+# build.sh — genera dist/: la herramienta entera en UN fichero, concatenando.
+# DCC_BUNDLE apaga la guarda de todos los módulos, así que pegados solo DEFINEN
+# y al final se añade un despachador. Catálogos, .jq y ayuda van incrustados.
 set -uo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -10,7 +10,17 @@ SRC=$ROOT/src
 OUT=${1:-$ROOT/dist/docker-control-center.sh}
 mkdir -p "$(dirname "$OUT")"
 
-VERSION=$(awk -F'"' '/^DCC_VERSION=/ {print $2; exit}' "$SRC/scripts/common.sh")
+# Se CARGA el runtime: de aquí salen DCC_VERSION y dcc_parse_commands(). Un
+# empaquetador con su propia idea del formato acaba metiendo en el bundle algo
+# que la herramienta no sabe ejecutar.
+# shellcheck source=src/scripts/common.sh
+. "$SRC/scripts/common.sh"
+VERSION=$DCC_VERSION
+
+# El despachador va SIEMPRE el último y por eso se saca del descubrimiento
+# automático: si entrara por el glob, un `zz-loquesea.sh` nuevo caería detrás y
+# bundle_main se ejecutaría antes de que ese módulo estuviera definido.
+DISPATCHER=bundle-main
 
 # El orden de carga, a mano y completo. Manda sobre el ORDEN, no sobre la
 # pertenencia: lo que no se nombre entra igual, al final y por orden alfabético.
@@ -39,30 +49,23 @@ resolve_modules() {
 	done
 	for f in "$SRC"/scripts/*.sh; do
 		name=$(basename "$f" .sh)
+		[ "$name" = "$DISPATCHER" ] && continue
 		printf '%s\n' "${BUNDLE_ORDER[@]}" | grep -qxF "$name" && continue
 		MODULES+=("$name")
 	done
+	[ -r "$SRC/scripts/$DISPATCHER.sh" ] || {
+		printf 'build.sh: falta el despachador %s.sh\n' "$DISPATCHER" >&2
+		return 1
+	}
 }
 resolve_modules || exit 1
 
-# Quita shebang, guarda final y `source` de hermanos. Casa LÍNEAS EXACTAS:
-# partirlas deja el bundle roto con el repositorio en verde (ver bundle_spec.sh).
-#
-# El source indentado se SUSTITUYE por `:` en vez de borrarse: es el único
-# cuerpo de un `if … then`, y quitarlo deja un bloque vacío que bash no parsea.
-# Y sin anclar al principio ni clases de caracteres: el patrón llevaba `\s`, que
-# no es POSIX —mawk no lo entiende y gawk sí—, y `[[:space:]]` tampoco vale
-# porque mawk 1.3.3 (Ubuntu 18.04) no lo soporta. Tres awks, tres resultados
-# distintos: en unos la línea sobrevivía y en otros dejaba el `if` vacío.
-strip_module() {
+# Solo COMENTARIOS, nunca código: si una de estas dos reglas falla sobra un
+# comentario, no sale un bundle roto.
+strip_comments() {
 	awk '
 		NR == 1 && /^#!/ { next }
-		/^# shellcheck source=src\/scripts\// { next }
-		/^\. "\$\(dirname "\$\{BASH_SOURCE\[0\]\}"\)\/common\.sh"$/ { next }
-		/\. "\$DCC_DIR\/[a-z-]+\.sh"$/ { print "\t:"; next }
-		/^if \[ "\$\{BASH_SOURCE\[0\]\}" = "\$\{0\}" \]; then$/ { skip = 1; next }
-		skip && /^fi$/ { skip = 0; next }
-		skip { next }
+		/^# shellcheck source=/ { next }
 		{ print }
 	' "$1"
 }
@@ -100,48 +103,17 @@ EOF
 
 	for m in "${MODULES[@]}"; do
 		printf '\n# --- %s.sh ---\n' "$m"
-		strip_module "$SRC/scripts/$m.sh"
+		strip_comments "$SRC/scripts/$m.sh"
 	done
 
-	# La ayuda sale de src/commands.txt, que solo describe el producto. Antes se
-	# extraía del Makefile y había que recortarlo por BUNDLE-EXCLUDE para no
-	# prometer lint, test y check, que el bundle no tiene.
+	# La ayuda sale de src/commands.txt, que solo describe el producto: del
+	# Makefile saldrían lint, test y check, que el fichero único no tiene.
 	printf '\n# --- ayuda (src/commands.txt) ---\nDCC_HELP_SRC=%s\n' \
-		"$(printf '%q' "$(grep -E '^##@ |^[a-zA-Z0-9_-]+:.*##' "$SRC/commands.txt")")"
+		"$(printf '%q' "$(dcc_parse_commands lines <"$SRC/commands.txt")")"
 
-	cat <<'EOF'
-
-# Despachador sin lista a mano: prueba cuatro fuentes que ya existen. Un módulo
-# con función <nombre>_main queda expuesto como `dcc <nombre>` sin tocar esto.
-
-bundle_main() {
-	local cmd=${1:-help} sections
-	shift || true
-
-	# 1. ¿Es una vista? -> la tabla de dashboard.sh
-	if sections=$(dcc_view_sections "$cmd"); then
-		[ "$cmd" = dash ] && { dashboard_main; return; }
-		dashboard_main --only "$sections"; return
-	fi
-
-	# 2. Los tres que no son ni vista ni módulo ni operación.
-	case "$cmd" in
-		help | -h | --help | '') render_help <<<"$DCC_HELP_SRC"; return ;;
-		version | -V | --version) dcc_version_info; return ;;
-		dash-fast)                FAST=1 dashboard_main; return ;;
-	esac
-
-	# 3. ¿Hay un módulo que se llame así? dex -> dex_main, lang -> lang_main.
-	if declare -F "${cmd//-/_}_main" >/dev/null 2>&1; then
-		"${cmd//-/_}_main" "$@"; return
-	fi
-
-	# 4. ¿Es una operación? -> dispatch, que deriva de las funciones op_*
-	dispatch "$cmd" "$@"
-}
-
-bundle_main "$@"
-EOF
+	# El despachador, el ÚLTIMO: cuando se ejecuta ya está todo definido.
+	printf '\n# --- %s.sh (el despachador) ---\n' "$DISPATCHER"
+	strip_comments "$SRC/scripts/$DISPATCHER.sh"
 } >"$OUT.tmp"
 
 # Aparte y luego mv (atómico): un fallo a mitad dejaría un $OUT truncado.

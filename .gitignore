@@ -1,8 +1,8 @@
 # ==============================================================================
 #  Lo que NUNCA debe salir de esta máquina.
 #
-#  `make volume-backup` y `make volume-backup-all` escriben tarballs con el
-#  CONTENIDO ÍNTEGRO de tus volúmenes (bases de datos incluidas) en ./backups.
+#  `dcc volume-backup` y `dcc volume-backup-all` escriben tarballs con el
+#  CONTENIDO ÍNTEGRO de tus volúmenes (bases de datos incluidas) en backups/.
 #  Sin esta regla, un `git add .` los publicaría. No la quites.
 # ==============================================================================
 backups/
@@ -16,8 +16,8 @@ dist/
 
 # Salida de `make coverage`: kcov escribe ~1 MB de HTML por ejecución. Es un
 # INFORME, no código — se regenera en 3 segundos y no se versiona.
-# OJO: `tools/shellspec/` SÍ va al repositorio. No es lo mismo: es el framework
-# vendorizado, y está ahí justo para que nadie tenga que instalar nada.
+# `vendor/` tampoco se versiona, catorce líneas más abajo: son las dependencias
+# de DESARROLLO, y `make deps` las vuelve a bajar del manifiesto con su sha256.
 coverage/
 report/
 

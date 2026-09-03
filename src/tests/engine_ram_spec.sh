@@ -1,9 +1,8 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034,SC2154,SC2215,SC2286,SC2288,SC2317,SC2329  # falsos positivos del DSL
 #
-# Tests de src/scripts/engine-ram.sh. Aquí vivía el bug de mawk que fallaba 1 de
-# cada 10 ejecuciones: SIGPIPE al leer un /proc que cambia bajo los pies, el END
-# que no se ejecutaba y la salida VACÍA en vez de un proceso de menos.
+# Aquí vivía el bug de mawk: al no poder abrir un fichero de /proc abortaba, se
+# saltaba el END y devolvía VACÍO en vez de un proceso de menos.
 
 Describe 'is_engine_proc()'
 	Include src/scripts/engine-ram.sh
@@ -49,10 +48,8 @@ Describe 'mb()'
 		End
 	End
 
-	# printf "%.1f" respeta el locale: en es_ES escupiría "1,0" con coma y
-	# chocaría con los tamaños que jq da con punto.
-	# Sin un locale de coma decimal generado, este test pasaría EN VACÍO: bash
-	# avisa por stderr y el formateo cae a C, que ya usa punto.
+	# printf "%.1f" respeta el locale: en es_ES daría "1,0" y chocaría con el punto
+	# que usa jq. Sin un locale de coma generado el test pasaría EN VACÍO.
 	comma_locale() { locale -a 2>/dev/null | grep -qiE '^(es_ES|de_DE|fr_FR)\.(utf-?8)$'; }
 	no_comma_locale() { ! comma_locale; }
 	pick_comma_locale() { locale -a 2>/dev/null | grep -iE '^(es_ES|de_DE|fr_FR)\.(utf-?8)$' | head -1; }

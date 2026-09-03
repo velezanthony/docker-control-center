@@ -1,9 +1,10 @@
 # ==============================================================================
 #  English message catalog.
 #
-#  This is the SOURCE language: every key must exist here. Other catalogs may
-#  be incomplete — t() falls back to the key name, so a missing translation is
-#  visible but never fatal.
+#  This is the SOURCE language: every key must exist here. And every other
+#  catalogue must carry exactly the same keys — a test compares both ways, so a
+#  missing one fails make check. dcc_load_language() empties MSG and loads ONE
+#  catalogue: there is no fallback to English, only to the key name.
 #
 #  Keys used inside pad()/rpad() must stay PLAIN TEXT: those helpers align by
 #  character count and ANSI escapes would be counted as visible characters.
@@ -11,7 +12,7 @@
 #  already defined by the time this file is sourced.
 #
 #  To add a language: copy this file to i18n/<code>.sh, translate the values,
-#  and teach _dcc_resolve_lang() in scripts/i18n.sh how to detect it.
+#  and teach dcc_load_language() in scripts/common.sh how to detect it.
 # ==============================================================================
 
 MSG+=(
@@ -38,7 +39,7 @@ MSG+=(
 
 	# --- make help ------------------------------------------------------------
 	[help_title]="Docker Control Center"
-	[help_usage]="— ${DCC_CMD} <target> · development only"
+	[help_usage]="— make <target> · development only"
 	[help_hint]="The product's own commands: make bundle, then ./dist/… help"
 
 	[sec_setup]="Setup"
@@ -75,7 +76,7 @@ MSG+=(
 	[help_logs]="Last 200 log lines [name]"
 	[help_tail]="Live log [name]"
 	[help_sh]="Shell inside the container [name]"
-	[help_dex]="Typo-proof exec: ${DCC_CMD} dex <container> [cmd] · with flags use CMD='…'"
+	[help_dex]="Typo-proof exec: dex <container> [command]"
 	[help_inspect]="Inspect a container as JSON [name]"
 	[help_start]="Start a container [name]"
 	[help_stop]="Stop a container [name]"
@@ -84,9 +85,9 @@ MSG+=(
 
 	[help_volume-inspect]="Show a volume's details [volume]"
 	[help_volume-tree]="List a volume's contents [volume]"
-	[help_volume-backup]="Back a volume up to ./backups [volume]"
-	[help_volume-backup-all]="Back ALL volumes up to ./backups"
-	[help_volume-restore]="Restore a volume from ./backups [volume]"
+	[help_volume-backup]="Back a volume up to backups/ [volume]"
+	[help_volume-backup-all]="Back ALL volumes up to backups/"
+	[help_volume-restore]="Restore a volume from backups/ [volume]"
 	[help_volumes-orphan]="Volumes no container is using"
 
 	[help_clean]="Safe cleanup: stopped containers, dangling images, unused networks"
@@ -114,6 +115,7 @@ MSG+=(
 	[op_started]="✓ %s started"
 	[op_stopped]="✓ %s stopped"
 	[op_restarted]="✓ %s restarted"
+	[op_action_failed]="Docker failed on '%s'. Look at what it just said above."
 	[op_removed]="✓ %s deleted"
 	[err_docker_down]="Cannot ask docker: the daemon is not responding."
 	[op_nothing_up]="Nothing is running."
@@ -194,7 +196,7 @@ MSG+=(
 
 	[st_created]="created"
 	[st_restarting]="restarting"
-	[footer_full]="${DCC_CMD} help · make clean · make clean-build · make stats"
+	[footer_full]="${DCC_CMD} help · ${DCC_CMD} clean · ${DCC_CMD} clean-build · ${DCC_CMD} stats"
 	[footer_partial]="${DCC_CMD} dash for the full view"
 
 	# --- dex.sh ---------------------------------------------------------------
@@ -230,6 +232,7 @@ MSG+=(
 	[check_ok]="✓ everything parses"
 	[pick_no_tty]="No terminal available to show a menu. Pass the name, or pick one of these:"
 	[restore_corrupt]="%s is corrupt (bad gzip). NOTHING has been deleted."
+	[restore_failed]="Restoring %s FAILED. The backup is intact, but the volume may be half-restored: look for a .dcc-restore directory inside it."
 	[backup_failed_one]="Could not back up %s"
 	[pick_unknown_container]="There is no container called '%s'."
 	[pick_unknown_running]="There is no running container called '%s'."
@@ -239,22 +242,13 @@ MSG+=(
 	[need_jq]="This command needs jq. Install it with: sudo apt install jq"
 	[backup_dir_unwritable]="Cannot write to %s"
 	[help_version]="Show the version and what was found on this system"
-	[bundle_usage]="dcc <command> [name]"
-	[bundle_more]="All commands:"
 	[help_bundle]="Build dist/docker-control-center.sh: the whole tool in one file"
 	[not_installed]="not installed"
+	[version_language]="language"
 	[help_usage_bundle]="— ${DCC_CMD} <command> [name]"
 	[help_hint_bundle]="With no argument, each command opens a menu to choose from."
-	[help_ram]="RAM used by the engine (dockerd + containerd + proxies)"
-	[help_ctx]="Show available contexts"
-	[help_stats]="Live usage (CPU/RAM) — Ctrl+C to quit"
 	[help_coverage]="Line coverage of scripts/ with kcov"
-	[help_fmt]="Format every script with shfmt"
 	[help_hooks]="Install the pre-commit git hook"
 	[need_kcov]="kcov is not installed. Install it with: brew install kcov"
-	[need_shfmt]="shfmt is not installed. Install it with: brew install shfmt"
-	[fmt_ok]="✓ formatted"
 	[hooks_ok]="✓ hook installed at %s"
-	[cov_title]="Line coverage"
-	[cov_none]="No coverage data. Is kcov installed?"
 )

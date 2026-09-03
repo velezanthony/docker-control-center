@@ -70,6 +70,6 @@ container_cpu() {
 	done < <(sample <<<"$list")
 }
 
-if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
+if [ -z "${DCC_BUNDLE:-}" ] && [ "${BASH_SOURCE[0]}" = "${0}" ]; then
 	container_cpu "$@"
 fi

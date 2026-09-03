@@ -1,11 +1,9 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034,SC2154,SC2215,SC2286,SC2288,SC2317,SC2329  # falsos positivos del DSL
 #
-# `docker` se TAPA con una función: se comprueba qué se le habría pedido sin
-# pedírselo, destructivas incluidas. Dos reglas:
-#  1. Los dobles van en BeforeEach, DESPUÉS del Include, o este los machaca.
-#  2. El registro va a un FICHERO: en subshell, una variable no vuelve y
-#     "no se llamó a docker" saldría verde aunque se hubiera llamado.
+# `docker` se TAPA con una función: se comprueba qué se le habría pedido, sin
+# pedírselo. Los dobles van en BeforeEach, DESPUÉS del Include, o este los
+# machaca; y el registro va a un FICHERO, que en subshell una variable no vuelve.
 
 Describe 'ops.sh'
 	Include src/scripts/ops.sh
@@ -99,14 +97,35 @@ Describe 'ops.sh'
 			When call with_space
 			The output should equal "mi volumen"
 		End
+
+		# "no me has dado el dato" y "el humano ha dicho que no" son opuestos y
+		# compartían el 2. El stdin va a /dev/null a propósito: `[ -t 0 ]` depende
+		# de cómo lances la suite.
+		Describe 'cancelar NO es lo mismo que usar mal'
+			It 'sin terminal es error de USO: falta el dato'
+				no_tty() { pick volume </dev/null; }
+				When call no_tty
+				The status should eq "$RC_USAGE"
+				The stderr should include "Pass the name"
+			End
+
+			It 'cerrar el menú sin elegir es CANCELAR, y tiene código propio'
+				cancelled() { has_tty() { return 0; }; pick volume </dev/null; }
+				When call cancelled
+				The status should eq "$RC_CANCELLED"
+				# El menú SÍ se pintó (a stderr, como todo lo que no es la elección):
+				# es lo que prueba que llegó al `select` y no se fue por la rama del
+				# "pásame el nombre".
+				The stderr should include "Choose a volume"
+				The stdout should be blank
+			End
+
+		End
 	End
 
 	# La última barrera antes de `docker rm -f` y de `rm -rf /data/*`. La palabra
-	# sale del CATÁLOGO: pedir "YES" a quien tiene la interfaz en español es
-	# pedirle que no lea lo que está confirmando.
-	# Nota: bash solo pinta el prompt de `read -p` si stdin es un TERMINAL. Aquí lo
-	# alimenta `Data`, así que no hay prompt que comprobar — y da igual, porque lo
-	# que importa no es el texto sino qué palabra ACEPTA.
+	# sale del CATÁLOGO: pedir "YES" en una interfaz en español es pedir que
+	# confirmen sin leer. No hay prompt que comprobar: `Data` no es un terminal.
 	Describe 'confirm()'
 		It 'la palabra exacta del catálogo continúa'
 			Data "YES"
@@ -174,6 +193,25 @@ Describe 'ops.sh'
 		End
 	End
 
+	# Tenía `docker exec -it` FIJO, duplicando lo que dex.sh ya hacía bien: en una
+	# tubería o con la entrada redirigida, docker aborta con "the input device is
+	# not a TTY". La suite no corre en terminal, así que aquí -t no puede salir.
+	Describe 'op_sh() comparte el exec con dex.sh'
+		It 'sin terminal pide -i, nunca -i -t'
+			shell_in() { op_sh web-1; calls; }
+			When call shell_in
+			The output should include "docker exec -i web-1 sh -c"
+			The output should not include "exec -i -t"
+		End
+
+		It 'prefiere bash y cae a sh, como dex'
+			shell_in() { op_sh web-1; calls; }
+			When call shell_in
+			The output should include "exec bash"
+			The output should include "exec sh"
+		End
+	End
+
 	# `docker rm -f`: la operación más destructiva que expone la herramienta.
 	Describe 'op_stack_rm()'
 		with_two() { stack_ids() { printf 'a\nb\n'; }; }
@@ -204,7 +242,7 @@ Describe 'ops.sh'
 			The output should include "docker rm -f a b"
 		End
 
-		# Un typo TIENE que fallar: `make stack-rm S=api && ./deploy.sh` no puede
+		# Un typo TIENE que fallar: `dcc stack-rm api && ./deploy.sh` no puede
 		# seguir adelante creyendo que borró algo.
 		It 'un stack sin contenedores devuelve 1 sin tocar docker'
 			empty() { stack_ids() { printf ''; }; op_stack_rm vacio; }
@@ -350,8 +388,48 @@ Describe 'ops.sh'
 		End
 	End
 
-	# Un typo en el nombre TIENE que fallar; un no-op, no. Antes todo devolvía 0 y
-	# `make stack-start S=api && ./deploy.sh` desplegaba contra un fantasma.
+	# Un typo en el nombre TIENE que fallar; un no-op, no: si todo devolviera 0,
+	# `dcc stack-start api && ./deploy.sh` desplegaría contra un fantasma. Y con
+	# el demonio caído hay que IMPRIMIR algo: fallar en silencio deja a quien lo
+	# ejecuta sin saber por qué no salió el ✓.
+	Describe 'stack_action() cuando docker DICE QUE NO'
+		docker_fails() {
+			stack_ids()         { printf 'todos-1\ntodos-2\n'; }
+			stack_ids_running() { printf 'todos-1\n'; }
+			docker() { printf 'docker %s\n' "$*" >>"$LOG"; return 1; }
+		}
+
+		It 'lo dice en vez de callarse'
+			boom() { docker_fails; stack_action start proyecto; }
+			When call boom
+			The status should eq 1
+			The output should not be blank
+		End
+
+		It 'y NO pinta el ✓ de que arrancó'
+			boom() { docker_fails; stack_action start proyecto 2>&1; }
+			When call boom
+			The status should eq 1
+			The output should not include "✓"
+		End
+	End
+
+	# Igual en el `rm -f`: es la operación más destructiva de la herramienta y
+	# pintaba el ✓ o nada.
+	Describe 'op_stack_rm() cuando el rm falla'
+		It 'avisa y devuelve != 0 en vez de pintar el ✓'
+			boom() {
+				stack_ids() { printf 'a\nb\n'; }
+				confirm() { return 0; }
+				docker() { return 1; }
+				op_stack_rm proyecto 2>&1
+			}
+			When call boom
+			The status should eq 1
+			The output should not include "✓"
+		End
+	End
+
 	Describe 'códigos de salida de stack_action()'
 		It 'un stack que ni está en la lista devuelve 1 y no llama a docker'
 			ghost() {
@@ -403,6 +481,21 @@ Describe 'ops.sh'
 			}
 			When call valid_backup
 			The output should include "docker volume create datos"
+		End
+
+		# Acababa en `docker run … && ok_msg`, sin rama else: el único comando del
+		# fichero que fallaba EN SILENCIO, y el que corre cuando algo ya va mal.
+		It 'si la extracción falla dentro del contenedor, lo DICE'
+			restore_fails() {
+				printf 'contenido' | gzip >"$BACKUP_DIR/datos.tar.gz"
+				# El volumen se crea; el `docker run` que extrae, no.
+				docker() { case "$*" in "volume create datos") return 0 ;; *) return 1 ;; esac; }
+				op_volume_restore datos 2>&1 | sed -E 's/\x1b\[[0-9;]*m//g'
+			}
+			When call restore_fails
+			The status should be failure
+			The output should include "half-restored"
+			The output should not include "✓"
 		End
 	End
 
@@ -465,13 +558,9 @@ Describe 'ops.sh'
 		End
 	End
 
-	# PROPIEDAD DE TODA LA FAMILIA, no un caso suelto. Con el demonio caído,
-	# ninguna operación puede decir que hizo algo. Es el test que habría cazado
-	# op_clean, op_volume_backup_all y op_kill_all de una vez, en vez de
-	# descubrirlos uno a uno — y el que caza el siguiente que se escriba.
-	#
-	# Ningún linter ve esto: shellcheck, ni con `-o all`, no dice nada del
-	# `cp x y; rm z` que devolvía el estado del rm. Es semántico, no sintáctico.
+	# PROPIEDAD DE TODA LA FAMILIA: con el demonio caído, ninguna operación puede
+	# decir que hizo algo. Caza op_clean, op_volume_backup_all y op_kill_all de una
+	# vez, y al siguiente que se escriba. Ningún linter ve esto: es semántico.
 	It 'con docker caído, ninguna operación pinta el ✓'
 		all_down() {
 			docker() { return 1; }
@@ -484,10 +573,8 @@ Describe 'ops.sh'
 			while read -r c; do
 				fn="op_${c//-/_}"
 				declare -F "$fn" >/dev/null 2>&1 || continue
-				# Solo se saltan las dos que NO necesitan docker: `ram` lee /proc y
-				# `engine` pregunta a systemd. Las que "transmiten" —logs, tail,
-				# stats, sh— no transmiten nada con docker doblado: devuelve al
-				# instante. Excluirlas era una cautela sin motivo.
+				# Solo las dos que NO necesitan docker: `ram` lee /proc y `engine`
+				# pregunta a systemd. Las que "transmiten" no transmiten nada doblado.
 				case "$c" in ram|engine) continue ;; esac
 				# Basta con que pinte el ✓: exigir ADEMÁS rc=0 dejaba pasar a
 				# op_clean, que lo pintaba y devolvía 1 de casualidad porque su
@@ -501,9 +588,10 @@ Describe 'ops.sh'
 		The output should be blank
 	End
 
-	# La lista de operaciones se deriva de `declare -F`: añadir una es escribir su
-	# función op_*, y no hay segundo sitio que actualizar. Antes había TRES listas
-	# y un test que vigilaba que no divergieran.
+	# La lista de operaciones es la INTERSECCIÓN de src/commands.txt y las
+	# funciones op_*: añadir una son DOS sitios, y si te dejas la línea de
+	# commands.txt el comando existe pero no se anuncia. Los dos ejemplos de
+	# abajo son justo esas dos mitades.
 	Describe 'dispatch()'
 		It 'rechaza una operación que no existe'
 			When call dispatch operacion-inventada
@@ -517,7 +605,7 @@ Describe 'ops.sh'
 			The stderr should not be blank
 		End
 
-		It 'expone 29 operaciones, derivadas de las funciones op_*'
+		It 'expone 29 operaciones: las anunciadas que además tienen función'
 			count_ops() { dispatch_names | wc -l; }
 			When call count_ops
 			The output should equal "29"

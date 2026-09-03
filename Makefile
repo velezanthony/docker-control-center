@@ -124,19 +124,11 @@ lint: ## Run shellcheck over every script
 		printf "$(C_RED)%s$(C_RESET)\n" "$$(t lint_fail)"; exit 1; \
 	fi
 
-# Los specs quedan fuera: shfmt desangra el DSL a la columna 0.
-.PHONY: fmt
-fmt: ## Format the scripts with shfmt (specs excluded: shfmt breaks the DSL)
-	@$(I18N) \
-	command -v shfmt >/dev/null || { say need_shfmt; exit 1; }; \
-	shfmt -w -ln bash -i 0 -ci $(SRC)/scripts/*.sh $(CURDIR)/build.sh $(CURDIR)/deps.sh; \
-	printf "$(C_GREEN)%s$(C_RESET)\n" "$$(t fmt_ok)"
-
 .PHONY: check
 check: ## Lint + parseo + tests + empaquetado: todo antes de un commit
 	@$(MAKE) --no-print-directory lint
 	@$(I18N) \
-	for f in $(SRC)/scripts/*.sh $(SRC)/tests/*.sh; do bash -n "$$f" || exit 1; done; \
+	for f in $(SRC)/scripts/*.sh $(SRC)/tests/*.sh $(CURDIR)/build.sh $(CURDIR)/deps.sh; do bash -n "$$f" || exit 1; done; \
 	printf "$(C_GREEN)%s$(C_RESET)\n" "$$(t check_ok)"
 	@$(MAKE) --no-print-directory test
 

@@ -1,11 +1,11 @@
 # ==============================================================================
 #  metrics.jq — cuenta la basura y el disco desde la salida cruda de /system/df.
 #
-#  Vive en un FICHERO y no dentro de una cadena de bash por dos razones:
-#  se puede validar (`jq -n -f metrics.jq`, que hace `make lint`) y se lee sin
-#  contar comillas. Antes eran 25 líneas de programa dentro de un '...' donde
-#  ni shellcheck ni los tests veían nada: un `|` de más se descubría en
-#  pantalla, en producción.
+#  Vive en un FICHERO y no dentro de una cadena de bash por dos razones: se
+#  puede validar —`make lint` lo hace, concatenándole bytes.jq delante porque
+#  aquí se usa h() y `jq -n -f` a secas fallaría con "h/0 is not defined"— y se
+#  lee sin contar comillas. Dentro de un '...' ni shellcheck ni los tests ven
+#  nada: un `|` de más se descubre en pantalla, en producción.
 #
 #  Salida: pares CLAVE<TAB>VALOR, que dashboard.sh mete en el array M.
 #
