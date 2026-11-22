@@ -1,3 +1,9 @@
+---
+seo:
+  title: "Docker dashboard for the terminal"
+  description: "Docker Control Center is a Docker dashboard for the terminal: containers by project, CPU, RAM, volumes and junk. Bash and make, no daemon."
+---
+
 # Docker Control Center
 
 A Docker dashboard for the terminal. Bash and `make`, no daemons, nothing
@@ -69,3 +75,6 @@ dcc dash
 
 One file, ~100 KB. See [Installation](users/installation.md) for the other way
 (cloning the repository) and the requirements.
+
+Why it exists and the decisions behind it are in the
+[case study](https://velezanthony.github.io/en/projects/docker-control-center/).

@@ -1,3 +1,5 @@
+<img src="docs-site/public/logo.svg" alt="" width="96">
+
 # Docker Control Center
 
 A Docker dashboard for the terminal. One bash file, no daemon, nothing resident.

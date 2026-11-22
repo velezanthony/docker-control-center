@@ -1,15 +1,22 @@
+---
+seo:
+  title: "Production-grade Bash with ShellSpec"
+  description: "A guide to production-grade Bash: strict mode, defensive typing, namespaces and tests with ShellSpec, with every snippet verified by running it."
+---
+
 # Production-grade Bash with ShellSpec
 
 Design guide for tools written in pure Bash (>= 4.4) with ShellSpec as the test
 framework. Every snippet on this page was **verified by running it** — not
 written from memory. Minimum Bash versions are noted where they matter.
 
-!!! warning "This repository promises Bash 4.0, not 4.4"
-    The guide assumes 4.4+. This project declares **4+** in its README, so
-    `${var@Q}` (4.4), `local -n` (4.3) and `BASH_ARGV0` (5.0) cannot be used in
-    `src/scripts/` without a fallback. A test enforces it
-    (`src/tests/bundle_spec.sh`). If you raise the requirement, that test is
-    where it is recorded.
+:::warning[This repository promises Bash 4.0, not 4.4]
+The guide assumes 4.4+. This project declares **4+** in its README, so
+`${var@Q}` (4.4), `local -n` (4.3) and `BASH_ARGV0` (5.0) cannot be used in
+`src/scripts/` without a fallback. A test enforces it
+(`src/tests/bundle_spec.sh`). If you raise the requirement, that test is
+where it is recorded.
+:::
 
 ---
 
@@ -58,7 +65,7 @@ trap '_traceback "$?" "$BASH_COMMAND" "$LINENO"' ERR
 
 Real output:
 
-```
+```text
 [ERROR] rc=1 at line 16: false
 Stack (most recent first):
   level_3() at tb.sh:17
@@ -246,15 +253,16 @@ new_server web example.com 8443
 server_url web        # -> https://example.com:8443
 ```
 
-!!! danger "The nameref name collision"
-    If the caller uses a variable with the **same name** as the nameref, Bash
-    aborts with *"circular name reference"*. Always prefix namerefs (`_obj`,
-    `__ref`) and never use that prefix outside.
+:::danger[The nameref name collision]
+If the caller uses a variable with the **same name** as the nameref, Bash
+aborts with *"circular name reference"*. Always prefix namerefs (`_obj`,
+`__ref`) and never use that prefix outside.
 
-    ```bash
-    f() { local -n obj=$1; ...; }
-    declare -A obj; f obj      # <- blows up
-    ```
+```bash
+f() { local -n obj=$1; ...; }
+declare -A obj; f obj      # <- blows up
+```
+:::
 
 Alternative without namerefs, Bash 4.0 compatible: one global dictionary with
 compound keys.
@@ -486,7 +494,7 @@ dictionary silently becomes indexed. Always use `Include`.
 If your code uses `\x1f` (or any control separator) and you pass it through
 `When call fn "$SEP" ...`, ShellSpec aborts with:
 
-```
+```text
 reporter.sh: line 216: field_: command not found
 1 example, 0 failures            <- the test PASSES
 Fatal error ... exit status 102  <- and the run aborts anyway
@@ -517,7 +525,7 @@ End
 
 ### A professional `.shellspec`
 
-```
+```text
 --load-path src/tests
 --require spec_helper
 --default-path src/tests
@@ -545,7 +553,7 @@ Options worth knowing, by context:
 
 Measured on this repository, 237 examples, machine idle:
 
-```
+```text
 bundle_spec.sh     20.0 s     <- builds and runs the bundle N times
 dashboard_spec.sh   1.9 s
 ops_spec.sh         1.0 s
@@ -555,7 +563,7 @@ whole suite        ~25 s
 
 **One file is 80 % of the time.** Which is why parallelism barely helps:
 
-```
+```text
 serial:     ~25.0 s
 --jobs 8:    22.4 s      <- 11 % better, not 8x
 ```
@@ -571,10 +579,11 @@ Describe 'the single file'
 End                                      # Aborts with exit 102.
 ```
 
-!!! danger "`--tag` only INCLUDES, it cannot exclude"
-    `--tag slow:no` does **not** mean "everything but the slow ones". It looks
-    for examples whose tag literally equals `slow:no` and returns **0 examples**.
-    Verified. If your fast loop "takes 5 seconds", check it is running anything.
+:::danger[`--tag` only INCLUDES, it cannot exclude]
+`--tag slow:no` does **not** mean "everything but the slow ones". It looks
+for examples whose tag literally equals `slow:no` and returns **0 examples**.
+Verified. If your fast loop "takes 5 seconds", check it is running anything.
+:::
 
 So the fast loop filters by **file**:
 
@@ -589,11 +598,12 @@ make test              # ~25 s: pre-commit and CI
 shellspec --tag slow   # only the slow ones, when you need them
 ```
 
-!!! tip "Measure on an idle machine"
-    The first version of this table said 96 s and 120 s. It was taken with
-    another stopwatch running in parallel over the same suite: the figures came
-    out **5× inflated**. The conclusion (one file dominates, `--jobs` will not
-    fix it) held; the numbers did not. Re-measure before quoting.
+:::tip[Measure on an idle machine]
+The first version of this table said 96 s and 120 s. It was taken with
+another stopwatch running in parallel over the same suite: the figures came
+out **5× inflated**. The conclusion (one file dominates, `--jobs` will not
+fix it) held; the numbers did not. Re-measure before quoting.
+:::
 
 ### `shfmt` DESTROYS spec files
 
@@ -645,7 +655,7 @@ all, and it keeps all 3.7 MB.
 A plain manifest plus a small installer closes that hole and generalises to the
 next dependency:
 
-```
+```text
 # name  version  sha256  url  [paths,to,keep]
 shellspec 0.28.1 400d8354… https://…/0.28.1.tar.gz shellspec,lib,libexec,helper,stub,bin
 ```
