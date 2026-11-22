@@ -1,3 +1,9 @@
+---
+seo:
+  title: "Install the Docker dashboard"
+  description: "Install Docker Control Center as a single 100 KB file or by cloning the repo. Requirements: Docker Engine, bash 4 and awk on any Linux distro."
+---
+
 # Installation
 
 ## One file

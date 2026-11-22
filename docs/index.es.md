@@ -1,3 +1,9 @@
+---
+seo:
+  title: "Panel de Docker para la terminal"
+  description: "Docker Control Center es un panel de Docker para la terminal: contenedores por proyecto, CPU, RAM, volúmenes y basura. Bash y make, sin daemon."
+---
+
 # Docker Control Center
 
 Un panel de control de Docker para la terminal. Bash y `make`, sin daemons ni
@@ -70,3 +76,6 @@ dcc dash
 
 Un fichero, ~100 KB. En [Instalación](users/installation.md) está la otra forma
 (clonando el repositorio) y los requisitos.
+
+Por qué existe y las decisiones detrás están en el
+[caso de estudio](https://velezanthony.github.io/proyectos/docker-control-center/).

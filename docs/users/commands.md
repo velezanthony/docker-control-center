@@ -1,3 +1,9 @@
+---
+seo:
+  title: "Commands: logs, stacks, volumes"
+  description: "Every Docker Control Center command explained: dashboard, logs, stack start and stop, volume backup and restore, safe cleanup and exit codes."
+---
+
 # Commands
 
 Run `make` (or `dcc`) with no arguments and you get the full list with

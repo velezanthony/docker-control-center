@@ -1,3 +1,9 @@
+---
+seo:
+  title: "Change the interface language"
+  description: "Switch Docker Control Center between English and Spanish: automatic from $LANG, saved with make lang, per command, or add a new language."
+---
+
 # Language
 
 The interface is in **English and Spanish**. With nothing configured it picks

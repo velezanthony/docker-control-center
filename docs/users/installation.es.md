@@ -1,3 +1,9 @@
+---
+seo:
+  title: "Instalar el panel de Docker"
+  description: "Instala Docker Control Center como un único fichero de 100 KB o clonando el repositorio. Requisitos: Docker Engine, bash 4 y awk en cualquier Linux."
+---
+
 # Instalación
 
 ## Un solo fichero

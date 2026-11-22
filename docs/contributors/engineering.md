@@ -1,3 +1,9 @@
+---
+seo:
+  title: "Production-grade Bash with ShellSpec"
+  description: "A guide to production-grade Bash: strict mode, defensive typing, namespaces and tests with ShellSpec, with every snippet verified by running it."
+---
+
 # Production-grade Bash with ShellSpec
 
 Design guide for tools written in pure Bash (>= 4.4) with ShellSpec as the test
