@@ -5,17 +5,20 @@ descriptions. This page explains the ones that need it.
 
 Every command that needs a name **opens a menu** if you do not give it one:
 
-=== "Repository"
-    ```bash
-    make logs              # menu to pick
-    make logs C=api        # straight to it
-    ```
-
-=== "Single file"
-    ```bash
-    dcc logs               # menu to pick
-    dcc logs api           # straight to it
-    ```
+::::tabs
+:::tab[Repository]
+```bash
+make logs              # menu to pick
+make logs C=api        # straight to it
+```
+:::
+:::tab[Single file]
+```bash
+dcc logs               # menu to pick
+dcc logs api           # straight to it
+```
+:::
+::::
 
 ## Overview
 
@@ -44,11 +47,12 @@ a container using two shows 200%.
 
 `stack-start`, `stack-stop`, `stack-restart`, `stack-logs`, `stack-rm`
 
-!!! info "Why not `up` and `down`"
-    In compose, `up` and `down` mean CREATE and DESTROY. These only start and
-    stop containers that already exist. Calling them `up` would be lying. To
-    create a stack from scratch you need its compose file — go to the project
-    directory.
+:::info[Why not `up` and `down`]
+In compose, `up` and `down` mean CREATE and DESTROY. These only start and
+stop containers that already exist. Calling them `up` would be lying. To
+create a stack from scratch you need its compose file — go to the project
+directory.
+:::
 
 Containers are found **by label**, not with `docker compose -p`: VS Code
 devcontainers record paths to ephemeral YAML files that VS Code then deletes, so
@@ -59,14 +63,15 @@ any `docker compose` against them fails. The project label is always there.
 `volume-inspect`, `volume-tree`, `volume-backup`, `volume-backup-all`,
 `volume-restore`, `volumes-orphan`
 
-!!! warning "About backups"
-    `volume-backup` writes the **entire contents** of your volumes to
-    `./backups` — databases included. That folder is in `.gitignore` for that
-    reason. To keep them outside the repository:
+:::warning[About backups]
+`volume-backup` writes the **entire contents** of your volumes to
+`./backups` — databases included. That folder is in `.gitignore` for that
+reason. To keep them outside the repository:
 
-    ```bash
-    BACKUP_DIR=/safe/path make volume-backup-all
-    ```
+```bash
+BACKUP_DIR=/safe/path make volume-backup-all
+```
+:::
 
 `volume-restore` **verifies the tar before deleting anything**. A corrupt backup
 does not destroy the volume.

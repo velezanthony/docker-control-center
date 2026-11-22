@@ -23,10 +23,11 @@ make
 
 `make` sin argumentos imprime la lista completa de comandos.
 
-!!! note "La imagen auxiliar"
-    La primera vez que uses `volume-tree`, `volume-backup` o `volume-restore`,
-    Docker se descargará la imagen `alpine` (unos 8 MB). Es la que se usa para
-    operar dentro del volumen. Puedes cambiarla con `HELPER_IMAGE=busybox`.
+:::note[La imagen auxiliar]
+La primera vez que uses `volume-tree`, `volume-backup` o `volume-restore`,
+Docker se descargará la imagen `alpine` (unos 8 MB). Es la que se usa para
+operar dentro del volumen. Puedes cambiarla con `HELPER_IMAGE=busybox`.
+:::
 
 ## Requisitos
 
@@ -80,7 +81,7 @@ Ubuntu. No hace falta `procps`: la RAM del motor se lee de `/proc` en bash puro.
 dcc version
 ```
 
-```
+```text
 Docker Control Center 0.9.0
   bash    5.2.21
   docker  /usr/bin/docker
