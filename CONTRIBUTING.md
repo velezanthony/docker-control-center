@@ -18,6 +18,10 @@ src/
 Makefile              development toolchain ONLY. It does not run the product.
 build.sh              concatenates src/scripts/ into dist/
 deps.sh               fetches vendor/ from dependencies.txt, verifying sha256
+
+docs/                 documentation pages, English; `x.es.md` is the Spanish one
+docs-site/            Astro site that publishes docs/ (Node >= 22.23.4):
+                      `npm ci && npm run dev` to preview, `npm run build` to check
 ```
 
 Three rules explain most of the design:
