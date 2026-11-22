@@ -1,3 +1,9 @@
+---
+seo:
+  title: "Change the interface language"
+  description: "Switch Docker Control Center between English and Spanish: automatic from $LANG, saved with make lang, per command, or add a new language."
+---
+
 # Language
 
 The interface is in **English and Spanish**. With nothing configured it picks
@@ -5,21 +11,24 @@ itself from your `$LANG`: if it is `es_*` you get Spanish, otherwise English.
 
 ## Changing it
 
-=== "Repository"
-    ```bash
-    make lang           # menu
-    make lang en        # straight to it
-    make lang auto      # back to auto-detection
-    ```
-
-=== "Single file"
-    ```bash
-    dcc lang
-    dcc lang en
-    dcc lang auto
-    ```
-
+::::tabs
+:::tab[Repository]
+```bash
+make lang           # menu
+make lang en        # straight to it
+make lang auto      # back to auto-detection
 ```
+:::
+:::tab[Single file]
+```bash
+dcc lang
+dcc lang en
+dcc lang auto
+```
+:::
+::::
+
+```text
   Current language: es Español (detected from your system locale)
 
   Choose a language:
@@ -41,20 +50,22 @@ DCC_LANG=es make dash      # just this once
 
 Full precedence:
 
-```
+```text
 DCC_LANG from the environment  >  ~/.config/dcc/config  >  $LANG  >  English
 ```
 
-!!! warning "Do not export `DCC_LANG`"
-    If you leave it exported in your terminal it will shadow the file and
-    `lang` will look broken. Use it in front of a specific command, as above.
-    If it happens, `lang` tells you and hands you the `unset`.
+:::warning[Do not export `DCC_LANG`]
+If you leave it exported in your terminal it will shadow the file and
+`lang` will look broken. Use it in front of a specific command, as above.
+If it happens, `lang` tells you and hands you the `unset`.
+:::
 
-!!! question "Why a file and not just a variable?"
-    A child process cannot modify its parent's environment. If `lang` ran
-    `export`, that variable would die with the process and your terminal would
-    never know. No command can change an environment variable for you — but it
-    can write a file that every script reads on startup.
+:::question[Why a file and not just a variable?]
+A child process cannot modify its parent's environment. If `lang` ran
+`export`, that variable would die with the process and your terminal would
+never know. No command can change an environment variable for you — but it
+can write a file that every script reads on startup.
+:::
 
 ## Adding a language
 

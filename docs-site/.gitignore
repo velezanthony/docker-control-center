@@ -1,0 +1,6 @@
+# Salida de `astro build` y tipos generados.
+dist/
+.astro/
+node_modules/
+.env
+.env.production

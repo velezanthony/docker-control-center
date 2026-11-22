@@ -1,3 +1,9 @@
+---
+seo:
+  title: "Install the Docker dashboard"
+  description: "Install Docker Control Center as a single 100 KB file or by cloning the repo. Requirements: Docker Engine, bash 4 and awk on any Linux distro."
+---
+
 # Installation
 
 ## One file
@@ -23,10 +29,11 @@ make
 
 `make` with no arguments prints the full command list.
 
-!!! note "The helper image"
-    The first time you use `volume-tree`, `volume-backup` or `volume-restore`,
-    Docker will pull the `alpine` image (about 8 MB). It is what runs inside the
-    volume. You can change it with `HELPER_IMAGE=busybox`.
+:::note[The helper image]
+The first time you use `volume-tree`, `volume-backup` or `volume-restore`,
+Docker will pull the `alpine` image (about 8 MB). It is what runs inside the
+volume. You can change it with `HELPER_IMAGE=busybox`.
+:::
 
 ## Requirements
 
@@ -80,7 +87,7 @@ does not need `procps`: the engine's RAM is read from `/proc` in pure bash.
 dcc version
 ```
 
-```
+```text
 Docker Control Center 0.9.0
   bash    5.2.21
   docker  /usr/bin/docker

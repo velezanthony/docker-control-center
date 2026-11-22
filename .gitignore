@@ -32,6 +32,3 @@ report/
 # Dependencias de desarrollo. Se traen con `make deps` desde
 # dependencies.txt, que es la lista de verdad. Material generado, como dist/.
 vendor/
-
-# Sitio de mkdocs generado por `mkdocs build`. Lo publica el workflow Docs.
-site/
